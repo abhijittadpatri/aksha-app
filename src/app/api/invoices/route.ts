@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { SESSION_COOKIE_NAME, getCookieFromHeader } from "@/lib/session";
 
+function getOrderItems(itemsJson: any): any[] {
+  if (!itemsJson) return [];
+  if (typeof itemsJson === "object" && Array.isArray(itemsJson.items)) return itemsJson.items;
+  return [];
+}
+
+
 function getUserId(req: Request) {
   const cookieHeader = req.headers.get("cookie");
   return getCookieFromHeader(cookieHeader, SESSION_COOKIE_NAME);
@@ -86,7 +93,7 @@ const created = await prisma.invoice.create({
 
     // ✅ store everything here to match your schema
     totalsJson: {
-      items: order.itemsJson?.items ?? [],
+      items: getOrderItems(order.itemsJson),
       subTotal,
       discount: disc,
       total: grandTotal,
