@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+enum Role {
+  ADMIN
+  DOCTOR
+  BILLING
+  SHOP_OWNER
+}
+
+model Tenant {
+  id       String    @id @default(cuid())
+  name     String
+  stores   Store[]
+  users    User[]
+  patients Patient[]
+
+  prescriptions Prescription[]
+  orders        SpectacleOrder[]
+  invoices      Invoice[]
+
+  createdAt DateTime @default(now())
+}
+
+model Store {
+  id       String      @id @default(cuid())
+  tenantId String
+  tenant   Tenant      @relation(fields: [tenantId], references: [id])
+  name     String
+  city     String?
+  address  String?
+  users    UserStore[]
+  patients Patient[]
+
+  prescriptions Prescription[]
+  orders        SpectacleOrder[]
+  invoices      Invoice[]
+
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id        String      @id @default(cuid())
+  tenantId  String
+  tenant    Tenant      @relation(fields: [tenantId], references: [id])
+  email     String      @unique
+  name      String?
+  role      Role        @default(BILLING)
+  stores    UserStore[]
+  createdAt DateTime    @default(now())
+}
+
+model UserStore {
+  userId  String
+  storeId String
+  user    User   @relation(fields: [userId], references: [id])
+  store   Store  @relation(fields: [storeId], references: [id])
+
+  @@id([userId, storeId])
+}
+
+model Patient {
+  id            String           @id @default(cuid())
+  tenantId      String
+  storeId       String
+  tenant        Tenant           @relation(fields: [tenantId], references: [id])
+  store         Store            @relation(fields: [storeId], references: [id])
+  name          String
+  mobile        String?
+  age           Int?
+  gender        String?
+  address       String?
+  prescriptions Prescription[]
+  orders        SpectacleOrder[]
+  invoices      Invoice[]
+  createdAt     DateTime         @default(now())
+}
+
+model Prescription {
+  id        String @id @default(cuid())
+  tenantId  String
+  storeId   String
+  patientId String
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  store   Store   @relation(fields: [storeId], references: [id])
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  orders SpectacleOrder[] // ✅ add this
+
+  rxJson    Json     @default("{}")
+  createdAt DateTime @default(now())
+}
+
+model SpectacleOrder {
+  id             String  @id @default(cuid())
+  tenantId       String
+  storeId        String
+  patientId      String
+  prescriptionId String?
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  store        Store         @relation(fields: [storeId], references: [id])
+  patient      Patient       @relation(fields: [patientId], references: [id])
+  prescription Prescription? @relation(fields: [prescriptionId], references: [id])
+
+  status       String    @default("Draft") // Draft | Ordered | Ready | Delivered
+  itemsJson    Json      @default("{}")
+  promisedDate DateTime?
+  invoice      Invoice?
+  createdAt    DateTime  @default(now())
+}
+
+model Invoice {
+  id        String  @id @default(cuid())
+  tenantId  String
+  storeId   String
+  patientId String
+  orderId   String? @unique
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id])
+  store   Store           @relation(fields: [storeId], references: [id])
+  patient Patient         @relation(fields: [patientId], references: [id])
+  order   SpectacleOrder? @relation(fields: [orderId], references: [id])
+
+  invoiceNo     String
+  totalsJson    Json          @default("{}")
+  paymentStatus String        @default("Unpaid") // Unpaid | Partial | Paid
+  items         InvoiceItem[]
+  createdAt     DateTime      @default(now())
+}
+
+model InvoiceItem {
+  id        String  @id @default(cuid())
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  name      String
+  qty       Int     @default(1)
+  rate      Decimal @default(0)
+  tax       Decimal @default(0)
+  amount    Decimal @default(0)
+}
