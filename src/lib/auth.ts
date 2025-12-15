@@ -1,37 +1,24 @@
-import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
+import { SESSION_COOKIE_NAME, getCookieFromHeader } from "@/lib/session";
+import type { NextRequest } from "next/server";
 
 export type AuthedUser = {
   id: string;
   role: string;
   tenantId: string;
-  storeIds?: string[];
 };
 
-/**
- * Reads session cookie set by /login and returns the user + tenant context.
- * Throws on unauthenticated.
- */
-export async function requireUser(_req?: Request): Promise<AuthedUser> {
-  // Session cookie name used across the app (change ONLY if your login uses a different cookie)
-  const session = cookies().get("session")?.value;
+export async function requireUser(req: NextRequest): Promise<AuthedUser> {
+  const cookieHeader = req.headers.get("cookie");
+  const session = getCookieFromHeader(cookieHeader, SESSION_COOKIE_NAME);
 
   if (!session) {
     throw new Error("Unauthorized");
   }
 
-  // For MVP we store userId in cookie (common in your current flow)
-  // If your cookie stores JSON, this still works because we fall back to parsing.
-  let userId = session;
-  try {
-    const maybe = JSON.parse(session);
-    if (maybe?.userId) userId = String(maybe.userId);
-  } catch {
-    // cookie is plain userId
-  }
-
+  // session is userId in your current flow
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { id: session },
     select: { id: true, role: true, tenantId: true },
   });
 
