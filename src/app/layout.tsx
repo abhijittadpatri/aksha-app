@@ -1,6 +1,8 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import AppHeader from "@/components/AppHeader";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+
 
 export const metadata: Metadata = {
   title: "Aksha",
@@ -13,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
+        <ServiceWorkerRegister />
         <AppHeader />
         {children}
       </body>
