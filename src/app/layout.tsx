@@ -1,10 +1,8 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import AppHeader from "@/components/AppHeader";
-import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import AppShell from "@/components/AppShell";
-
-
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
   title: "Aksha",

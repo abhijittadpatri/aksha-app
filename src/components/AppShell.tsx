@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, Users, FileText, Receipt } from "lucide-react";
+import { LayoutDashboard, Users, Receipt } from "lucide-react";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
