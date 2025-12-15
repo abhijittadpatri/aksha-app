@@ -2,6 +2,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 import AppHeader from "@/components/AppHeader";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import AppShell from "@/components/AppShell";
+
 
 
 export const metadata: Metadata = {
@@ -17,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ServiceWorkerRegister />
         <AppHeader />
-        {children}
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );
