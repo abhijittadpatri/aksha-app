@@ -1,13 +1,54 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { LayoutDashboard, Users, Receipt } from "lucide-react";
 
-const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/patients", label: "Patients", icon: Users },
-  { href: "/invoices", label: "Invoices", icon: Receipt },
+type MeUser = {
+  id: string;
+  email?: string | null;
+  name?: string | null;
+  role: string;
+  tenant?: any;
+  stores?: any[];
+} | null;
+
+const NAV = [
+  {
+    href: "/dashboard",
+    label: "Dashboard",
+    icon: LayoutDashboard,
+    roles: ["ADMIN", "OWNER", "DOCTOR", "BILLING"],
+  },
+  {
+    href: "/patients",
+    label: "Patients",
+    icon: Users,
+    roles: ["ADMIN", "OWNER", "DOCTOR", "BILLING"],
+  },
+  {
+    href: "/invoices",
+    label: "Invoices",
+    icon: Receipt,
+    roles: ["ADMIN", "OWNER", "BILLING"],
+  },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  const [me, setMe] = useState<MeUser>(null);
+
+  useEffect(() => {
+    fetch("/api/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setMe(d.user ?? null))
+      .catch(() => setMe(null));
+  }, []);
+
+  // If me is not loaded yet, default to ADMIN so UI doesn't look empty during first paint.
+  const role = (me?.role ?? "ADMIN").toUpperCase();
+
+  const nav = useMemo(() => NAV.filter((x) => x.roles.includes(role)), [role]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="mx-auto max-w-7xl">
@@ -15,6 +56,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {/* Sidebar (desktop) */}
           <aside className="hidden md:flex md:w-64 md:flex-col md:gap-2 md:border-r md:bg-white md:px-4 md:py-4">
             <div className="px-2 text-lg font-semibold">Aksha</div>
+
+            <div className="px-2 text-xs text-gray-500 space-y-1">
+              <div>
+                Role: <span className="font-medium">{role}</span>
+              </div>
+              {me?.tenant?.name && (
+                <div>
+                  Tenant: <span className="font-medium">{me.tenant.name}</span>
+                </div>
+              )}
+            </div>
+
             <nav className="mt-2 flex flex-col gap-1">
               {nav.map((item) => {
                 const Icon = item.icon;
@@ -60,7 +113,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      {/* Spacer for mobile bottom nav */}
       <div className="h-14 md:hidden" />
     </div>
   );
