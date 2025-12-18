@@ -19,6 +19,17 @@ export async function GET(req: Request) {
 
     if (!user) return NextResponse.json({ user: null });
 
+    // 🔑 OWNER sees ALL stores in tenant
+    let stores = user.stores.map((s) => s.store);
+
+    if (user.role === "OWNER") {
+      const allStores = await prisma.store.findMany({
+        where: { tenantId: user.tenantId },
+        orderBy: { name: "asc" },
+      });
+      stores = allStores;
+    }
+
     return NextResponse.json({
       user: {
         id: user.id,
@@ -27,7 +38,7 @@ export async function GET(req: Request) {
         role: user.role,
         mustChangePassword: user.mustChangePassword,
         tenant: user.tenant,
-        stores: user.stores.map((s) => s.store),
+        stores,
       },
     });
   } catch (e: any) {
