@@ -16,23 +16,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
-
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !user.passwordHash) {
-      return NextResponse.json(
-        { error: "Invalid credentials" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
     const ok = await verifyPassword(password, user.passwordHash);
     if (!ok) {
-      return NextResponse.json(
-        { error: "Invalid credentials" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
     }
 
     const res = NextResponse.json({
@@ -45,7 +36,7 @@ export async function POST(req: Request) {
       },
     });
 
-    // ✅ SET SESSION COOKIE (same pattern as existing login)
+    // ✅ Session cookie (same style as your existing system)
     res.cookies.set({
       name: SESSION_COOKIE_NAME,
       value: user.id,

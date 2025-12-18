@@ -26,6 +26,11 @@ export default function AppHeader() {
 
         setMe(data.user ?? null);
 
+        if (data.user?.mustChangePassword) {
+          router.push("/change-password");
+          return;
+        }
+
         // ensure active store selected
         if (data.user?.stores?.length) {
           const saved = localStorage.getItem("activeStoreId");
@@ -57,7 +62,14 @@ export default function AppHeader() {
           <Link className="underline" href="/patients">
             Patients
           </Link>
+
+          {(me?.role === "ADMIN" || me?.role === "OWNER") && (
+            <Link className="underline" href="/users">
+              Users
+            </Link>
+          )}
         </nav>
+
       </div>
 
       {me === undefined ? (

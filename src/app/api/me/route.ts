@@ -25,6 +25,7 @@ export async function GET(req: Request) {
         email: user.email,
         name: user.name,
         role: user.role,
+        mustChangePassword: user.mustChangePassword,
         tenant: user.tenant,
         stores: user.stores.map((s) => s.store),
       },
