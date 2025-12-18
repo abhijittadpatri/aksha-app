@@ -8,7 +8,7 @@ function getUserId(req: NextRequest) {
 }
 
 function todayRangeIST() {
-  // Compute start/end of today in Asia/Kolkata, returned as UTC Date objects
+  // Compute start/end of today in Asia/Kolkata, but return as UTC Date objects
   const offsetMs = 330 * 60 * 1000; // +05:30
   const now = new Date();
 
@@ -28,12 +28,6 @@ function todayRangeIST() {
 function safeNumber(v: any) {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
-}
-
-function isPaidStatus(paymentStatus: any) {
-  // Your schema default: "Unpaid" (case varies), and you may use "Paid"
-  const s = String(paymentStatus ?? "").trim().toLowerCase();
-  return s === "paid";
 }
 
 export async function GET(req: NextRequest) {
@@ -59,35 +53,33 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const storeIdParam = url.searchParams.get("storeId");
 
-    // storeId supports:
-    // - specific storeId (must be in allowedStoreIds)
-    // - "ALL" to aggregate across allowedStoreIds
-    const wantsAll = storeIdParam === "ALL";
+    const isOwner = user.role === "OWNER";
+    const isAllStores = isOwner && storeIdParam === "all";
+
+    // If not ALL, enforce storeId within allowed stores
     const storeId =
       storeIdParam && allowedStoreIds.includes(storeIdParam) ? storeIdParam : allowedStoreIds[0];
 
     const { startUtc, endUtc } = todayRangeIST();
 
+    // Build where clause (all stores vs single store)
     const baseWhere: any = {
       tenantId: user.tenantId,
       createdAt: { gte: startUtc, lt: endUtc },
-      ...(wantsAll ? { storeId: { in: allowedStoreIds } } : { storeId }),
+      ...(isAllStores ? { storeId: { in: allowedStoreIds } } : { storeId }),
     };
 
-    // Count invoices today
     const invoicesToday = await prisma.invoice.count({ where: baseWhere });
 
-    // Unpaid count today (anything NOT "Paid" (insensitive))
+    // NOTE: your schema says paymentStatus default("Unpaid") — normalize checks safely
     const unpaidInvoicesToday = await prisma.invoice.count({
       where: {
         ...baseWhere,
-        NOT: {
-          paymentStatus: { equals: "Paid", mode: "insensitive" },
-        },
+        paymentStatus: { in: ["UNPAID", "Unpaid"] },
       },
     });
 
-    // Sum totals by reading totalsJson.total (TS-safe, schema-safe)
+    // Pull today's invoices and sum totals from totalsJson (TS-safe)
     const todayInvoices = await prisma.invoice.findMany({
       where: baseWhere,
       select: {
@@ -102,33 +94,29 @@ export async function GET(req: NextRequest) {
     for (const inv of todayInvoices) {
       const tj: any = inv.totalsJson ?? {};
       const total = safeNumber(tj.total);
+
       todaySalesGross += total;
 
-      if (isPaidStatus(inv.paymentStatus)) {
-        todaySalesPaid += total;
-      }
+      const ps = String(inv.paymentStatus ?? "").toLowerCase();
+      if (ps === "paid") todaySalesPaid += total;
     }
 
-    const todaySalesUnpaid = Math.max(0, todaySalesGross - todaySalesPaid);
-
+    // Response store label
     const store =
-      wantsAll
-        ? null
-        : user.stores.find((s) => s.storeId === storeId)?.store;
+      !isAllStores ? user.stores.find((s) => s.storeId === storeId)?.store : null;
 
     return NextResponse.json({
-      store: wantsAll
-        ? { id: "ALL", name: "All Stores" }
+      store: isAllStores
+        ? { id: "all", name: "All Stores" }
         : store
-          ? { id: store.id, name: store.name }
-          : { id: storeId, name: "Store" },
+        ? { id: store.id, name: store.name }
+        : { id: storeId, name: "Store" },
       range: { startUtc: startUtc.toISOString(), endUtc: endUtc.toISOString() },
       metrics: {
         invoicesToday,
-        unpaidInvoicesToday,
         todaySalesGross,
         todaySalesPaid,
-        todaySalesUnpaid,
+        unpaidInvoicesToday,
       },
     });
   } catch (e: any) {
