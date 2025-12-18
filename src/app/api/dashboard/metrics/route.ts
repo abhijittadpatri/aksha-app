@@ -25,6 +25,11 @@ function todayRangeIST() {
   return { startUtc, endUtc };
 }
 
+function safeNumber(v: any) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const userId = getUserId(req);
@@ -47,55 +52,57 @@ export async function GET(req: NextRequest) {
 
     const url = new URL(req.url);
     const storeIdParam = url.searchParams.get("storeId");
-    const storeId = storeIdParam && allowedStoreIds.includes(storeIdParam)
-      ? storeIdParam
-      : allowedStoreIds[0];
+    const storeId =
+      storeIdParam && allowedStoreIds.includes(storeIdParam) ? storeIdParam : allowedStoreIds[0];
 
     const { startUtc, endUtc } = todayRangeIST();
 
     // Count invoices today
-    const countAgg = await prisma.invoice.aggregate({
+    const invoicesToday = await prisma.invoice.count({
       where: {
         tenantId: user.tenantId,
         storeId,
         createdAt: { gte: startUtc, lt: endUtc },
       },
-      _count: { _all: true },
-    });
-
-    // Sum totals today (gross)
-    const sumAgg = await prisma.invoice.aggregate({
-      _sum: { total: true },
-      where: {
-        tenantId: user.tenantId,
-        storeId,
-        createdAt: { gte: start, lt: end },
-      },
-    });
-
-const todaySales = Number(sumAgg._sum.total || 0);
-
-
-    // Sum totals today (paid only)
-    const paidAgg = await prisma.invoice.aggregate({
-      where: {
-        tenantId: user.tenantId,
-        storeId,
-        createdAt: { gte: startUtc, lt: endUtc },
-        paid: true,
-      },
-      _sum: { total: true },
     });
 
     // Unpaid count today
-    const unpaidCount = await prisma.invoice.count({
+      const unpaidInvoicesToday = await prisma.invoice.count({
+        where: {
+          tenantId: user.tenantId,
+          storeId,
+          createdAt: { gte: startUtc, lt: endUtc },
+          paymentStatus: "UNPAID",
+        },
+      });
+
+    // Pull today's invoices and sum totals from totalsJson (MVP-friendly + TS-safe)
+    const todayInvoices = await prisma.invoice.findMany({
       where: {
         tenantId: user.tenantId,
         storeId,
         createdAt: { gte: startUtc, lt: endUtc },
-        paid: false,
+      },
+      select: {
+        paymentStatus: true,
+        totalsJson: true,
       },
     });
+
+    let todaySalesGross = 0;
+    let todaySalesPaid = 0;
+
+    for (const inv of todayInvoices) {
+      const tj: any = inv.totalsJson ?? {};
+      const total = safeNumber(tj.total);
+
+      todaySalesGross += total;
+
+      if (inv.paymentStatus === "PAID") {
+        todaySalesPaid += total;
+      }
+    }
+
 
     const store = user.stores.find((s) => s.storeId === storeId)?.store;
 
@@ -103,16 +110,13 @@ const todaySales = Number(sumAgg._sum.total || 0);
       store: store ? { id: store.id, name: store.name } : { id: storeId, name: "Store" },
       range: { startUtc: startUtc.toISOString(), endUtc: endUtc.toISOString() },
       metrics: {
-        invoicesToday: countAgg._count._all ?? 0,
-        todaySalesGross: Number(sumAgg._sum.total ?? 0),
-        todaySalesPaid: Number(paidAgg._sum.total ?? 0),
-        unpaidInvoicesToday: unpaidCount,
+        invoicesToday,
+        todaySalesGross,
+        todaySalesPaid,
+        unpaidInvoicesToday,
       },
     });
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? "Metrics error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: e?.message ?? "Metrics error" }, { status: 500 });
   }
 }
