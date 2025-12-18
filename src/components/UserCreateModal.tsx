@@ -11,9 +11,7 @@ export default function UserCreateModal({
 }: {
   open: boolean;
   onClose: () => void;
-
-  // ✅ updated: pass back created user info for invite message
-  onCreated: (payload: { email: string; tempPassword: string }) => void;
+  onCreated: () => void;
 }) {
   const [stores, setStores] = useState<Store[]>([]);
   const [email, setEmail] = useState("");
@@ -44,20 +42,15 @@ export default function UserCreateModal({
   }, [open]);
 
   function toggleStore(id: string) {
-    setStoreIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    setStoreIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
   async function create() {
     setErr(null);
 
     const e = email.trim().toLowerCase();
-    const tp = tempPassword.trim();
-
     if (!e) return setErr("Email is required");
-    if (!tp || tp.length < 6)
-      return setErr("Temp password must be 6+ characters");
+    if (!tempPassword || tempPassword.trim().length < 6) return setErr("Temp password must be 6+ characters");
     if (storeIds.length === 0) return setErr("Select at least one store");
 
     setSaving(true);
@@ -71,7 +64,7 @@ export default function UserCreateModal({
           name: name.trim(),
           role,
           storeIds,
-          tempPassword: tp,
+          tempPassword: tempPassword.trim(),
         }),
       });
 
@@ -82,14 +75,10 @@ export default function UserCreateModal({
         return;
       }
 
-      // ✅ Pass email + temp password to parent so it can show invite box
-      onCreated({ email: e, tempPassword: tp });
-
+      onCreated();
       onClose();
     } catch (e: any) {
       setErr(String(e?.message ?? e ?? "Create failed"));
-      setSaving(false);
-    } finally {
       setSaving(false);
     }
   }
@@ -106,6 +95,10 @@ export default function UserCreateModal({
           </button>
         </div>
 
+        <div className="text-xs text-gray-600">
+          Note: <span className="font-medium">Owners are created manually</span> (security best-practice). You can create Admin/Doctor/Billing here.
+        </div>
+
         {err && <div className="text-sm text-red-600">{err}</div>}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -115,7 +108,8 @@ export default function UserCreateModal({
               className="w-full border rounded-lg p-2"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="doctor@clinic.com"
+              placeholder="user@clinic.com"
+              autoComplete="off"
             />
           </div>
 
@@ -125,21 +119,17 @@ export default function UserCreateModal({
               className="w-full border rounded-lg p-2"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Dr. Name"
+              placeholder="Full name"
+              autoComplete="off"
             />
           </div>
 
           <div>
             <div className="text-xs text-gray-500 mb-1">Role *</div>
-            <select
-              className="w-full border rounded-lg p-2"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-            >
+            <select className="w-full border rounded-lg p-2" value={role} onChange={(e) => setRole(e.target.value)}>
               <option value="DOCTOR">Doctor</option>
               <option value="BILLING">Billing</option>
               <option value="ADMIN">Admin</option>
-              <option value="OWNER">Owner</option>
             </select>
           </div>
 
@@ -147,10 +137,11 @@ export default function UserCreateModal({
             <div className="text-xs text-gray-500 mb-1">Temp Password *</div>
             <input
               className="w-full border rounded-lg p-2"
-              type="password"
               value={tempPassword}
               onChange={(e) => setTempPassword(e.target.value)}
               placeholder="Min 6 characters"
+              type="text"
+              autoComplete="off"
             />
           </div>
         </div>
@@ -170,20 +161,14 @@ export default function UserCreateModal({
                   }`}
                 >
                   <div className="font-medium">{s.name}</div>
-                  <div
-                    className={`text-xs ${
-                      checked ? "text-white/80" : "text-gray-500"
-                    }`}
-                  >
+                  <div className={`text-xs ${checked ? "text-white/80" : "text-gray-500"}`}>
                     {s.city ?? ""}
                   </div>
                 </button>
               );
             })}
             {stores.length === 0 && (
-              <div className="text-sm text-gray-500">
-                No stores found. (Seed should create stores.)
-              </div>
+              <div className="text-sm text-gray-500">No stores found. (Seed should create stores.)</div>
             )}
           </div>
         </div>
