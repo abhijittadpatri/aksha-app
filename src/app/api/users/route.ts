@@ -1,9 +1,12 @@
+// src/app/api/users/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { SESSION_COOKIE_NAME, getCookieFromHeader } from "@/lib/session";
 import { hashPassword } from "@/lib/password";
 
-// ---- Helpers ----
+// =====================
+// Helpers
+// =====================
 function getUserId(req: NextRequest) {
   const cookieHeader = req.headers.get("cookie");
   return getCookieFromHeader(cookieHeader, SESSION_COOKIE_NAME);
@@ -32,33 +35,17 @@ async function requireAuthed(req: NextRequest): Promise<AuthedUser> {
   return {
     id: user.id,
     tenantId: user.tenantId,
-    role: user.role,
+    role: String(user.role),
     allowedStoreIds,
   };
 }
 
-function isOwner(role: string) {
+// ✅ Canonical role checks (match Prisma schema)
+function isShopOwner(role: string) {
   return role === "SHOP_OWNER";
 }
 function isAdmin(role: string) {
   return role === "ADMIN";
-}
-
-function canCreateRole(creatorRole: string, targetRole: string) {
-  // Rule: Only SHOP_OWNER can create SHOP_OWNER (optional but safe)
-  if (targetRole === "SHOP_OWNER") return creatorRole === "SHOP_OWNER";
-
-  if (creatorRole === "SHOP_OWNER") {
-    // Owner can create everyone (including ADMIN)
-    return ["ADMIN", "DOCTOR", "BILLING"].includes(targetRole);
-  }
-
-  if (creatorRole === "ADMIN") {
-    // Admin can create only doctor/billing
-    return ["DOCTOR", "BILLING"].includes(targetRole);
-  }
-
-  return false;
 }
 
 function normalizeEmail(email: string) {
@@ -71,20 +58,38 @@ function validateTempPassword(pw: string) {
   return null;
 }
 
-// ---- GET /api/users ----
-// Returns tenant users.
-// - SHOP_OWNER: all tenant users
-// - ADMIN: only users who share >=1 store with admin
+// Creation policy:
+// - SHOP_OWNER: cannot be created via API (manual only)
+// - SHOP_OWNER can create: ADMIN, DOCTOR, BILLING
+// - ADMIN can create: DOCTOR, BILLING
+function canCreateRole(creatorRole: string, targetRole: string) {
+  if (targetRole === "SHOP_OWNER") return false;
+
+  if (isShopOwner(creatorRole)) {
+    return ["ADMIN", "DOCTOR", "BILLING"].includes(targetRole);
+  }
+
+  if (isAdmin(creatorRole)) {
+    return ["DOCTOR", "BILLING"].includes(targetRole);
+  }
+
+  return false;
+}
+
+// =====================
+// GET /api/users
+// - SHOP_OWNER: all users in tenant
+// - ADMIN: users who share at least 1 store with admin
+// =====================
 export async function GET(req: NextRequest) {
   try {
     const me = await requireAuthed(req);
 
-    if (!isOwner(me.role) && !isAdmin(me.role)) {
+    if (!isShopOwner(me.role) && !isAdmin(me.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // SHOP_OWNER: all tenant users
-    if (isOwner(me.role)) {
+    if (isShopOwner(me.role)) {
       const users = await prisma.user.findMany({
         where: { tenantId: me.tenantId },
         orderBy: { createdAt: "desc" },
@@ -108,11 +113,7 @@ export async function GET(req: NextRequest) {
     const users = await prisma.user.findMany({
       where: {
         tenantId: me.tenantId,
-        stores: {
-          some: {
-            storeId: { in: me.allowedStoreIds },
-          },
-        },
+        stores: { some: { storeId: { in: me.allowedStoreIds } } },
       },
       orderBy: { createdAt: "desc" },
       include: { stores: { include: { store: true } } },
@@ -134,23 +135,25 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ---- POST /api/users ----
+// =====================
+// POST /api/users
 // Create user with temp password + mustChangePassword=true
-// - Only SHOP_OWNER can create SHOP_OWNER
+// - SHOP_OWNER cannot be created here (manual only)
 // - ADMIN cannot create ADMIN/SHOP_OWNER
 // - StoreIds must be within creator’s store access unless creator is SHOP_OWNER
+// =====================
 export async function POST(req: NextRequest) {
   try {
     const me = await requireAuthed(req);
 
-    if (!isOwner(me.role) && !isAdmin(me.role)) {
+    if (!isShopOwner(me.role) && !isAdmin(me.role)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
     const body = await req.json().catch(() => ({}));
     const email = normalizeEmail(String(body.email ?? ""));
     const name = String(body.name ?? "").trim() || null;
-    const role = String(body.role ?? "BILLING").trim();
+    const role = String(body.role ?? "BILLING").trim(); // must match Prisma enum strings
     const storeIds = Array.isArray(body.storeIds) ? body.storeIds.map(String) : [];
     const tempPassword = String(body.tempPassword ?? "");
 
@@ -159,15 +162,14 @@ export async function POST(req: NextRequest) {
 
     // Enforce role policy
     if (!canCreateRole(me.role, role)) {
-      const msg =
-        role === "SHOP_OWNER"
-          ? "Only the chain owner can create another Owner."
-          : "Not allowed to create this role";
-      return NextResponse.json({ error: msg }, { status: 403 });
+      return NextResponse.json(
+        { error: role === "SHOP_OWNER" ? "Shop owners must be created manually" : "Not allowed to create this role" },
+        { status: 403 }
+      );
     }
 
     // Enforce store scoping
-    if (!isOwner(me.role)) {
+    if (!isShopOwner(me.role)) {
       // Admin can only assign within their own stores
       const bad = storeIds.find((id: string) => !me.allowedStoreIds.includes(id));
       if (bad) {
@@ -186,7 +188,7 @@ export async function POST(req: NextRequest) {
     const pwErr = validateTempPassword(tempPassword);
     if (pwErr) return NextResponse.json({ error: pwErr }, { status: 400 });
 
-    // Prevent duplicates (email is unique in schema)
+    // Prevent duplicates
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       return NextResponse.json({ error: "Email already exists" }, { status: 409 });
