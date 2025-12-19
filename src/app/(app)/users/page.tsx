@@ -1,79 +1,55 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import UserCreateModal from "@/components/UserCreateModal";
-import { useRouter } from "next/navigation";
-
-type CreatedPayload =
-  | {
-      email?: string;
-      tempPassword?: string;
-    }
-  | null
-  | undefined;
+import UserCreateModal, {
+  CreatedPayload,
+} from "@/components/UserCreateModal";
 
 export default function UsersPage() {
-  const router = useRouter();
-
   const [users, setUsers] = useState<any[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [me, setMe] = useState<any>(undefined);
 
-  // Invite message
+  // Invite message state
   const [inviteText, setInviteText] = useState<string>("");
 
-  // ---- Load current user ----
+  // Load current user
   useEffect(() => {
     (async () => {
-      try {
-        const res = await fetch("/api/me", { credentials: "include" });
-        const data = await res.json().catch(() => ({}));
-        setMe(data.user ?? null);
-      } catch {
-        setMe(null);
-      }
+      const res = await fetch("/api/me", { credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      setMe(data.user ?? null);
     })();
   }, []);
 
-  // ---- Auth / role guard ----
-  useEffect(() => {
-    if (me === undefined) return; // still loading
+  // Auth / role guard
+  if (me === null) {
+    if (typeof window !== "undefined") window.location.href = "/login";
+    return null;
+  }
 
-    if (me === null) {
-      router.replace("/login");
-      return;
-    }
+  if (me && me.role !== "ADMIN" && me.role !== "SHOP_OWNER") {
+    if (typeof window !== "undefined") window.location.href = "/dashboard";
+    return null;
+  }
 
-    const role = String(me.role || "").toUpperCase();
-    if (role !== "ADMIN" && role !== "OWNER" && role !== "SHOP_OWNER") {
-      router.replace("/dashboard");
-    }
-  }, [me, router]);
-
-  // ---- Load users ----
   async function load() {
     setErr(null);
-    try {
-      const res = await fetch("/api/users", { credentials: "include" });
-      const data = await res.json().catch(() => ({}));
+    const res = await fetch("/api/users", { credentials: "include" });
+    const data = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
-        setErr(data.error ?? "Failed to load users");
-        return;
-      }
-
-      setUsers(data.users || []);
-    } catch (e: any) {
-      setErr(e?.message ?? "Failed to load users");
+    if (!res.ok) {
+      setErr(data.error ?? "Failed to load users");
+      return;
     }
+    setUsers(data.users || []);
   }
 
   useEffect(() => {
     load();
   }, []);
 
-  // ---- Invite message builder ----
   function buildInvite(email?: string, tempPassword?: string) {
     if (!email || !tempPassword) return "";
 
@@ -93,18 +69,11 @@ Please login and change your password immediately.
 `.trim();
   }
 
-  if (me === undefined) {
-    return (
-      <main className="p-6">
-        <div className="text-sm text-gray-500">Loading…</div>
-      </main>
-    );
-  }
-
   return (
     <main className="p-6 space-y-4">
       <div className="flex justify-between items-center">
         <h1 className="text-xl font-semibold">Users</h1>
+
         <button
           className="bg-black text-white px-3 py-2 rounded-lg text-sm"
           onClick={() => setOpen(true)}
@@ -154,7 +123,6 @@ Please login and change your password immediately.
         </div>
       )}
 
-      {/* Users table */}
       <div className="border rounded-xl overflow-hidden">
         <div className="grid grid-cols-6 bg-gray-50 text-sm font-medium p-3">
           <div>Name</div>
@@ -221,15 +189,11 @@ Please login and change your password immediately.
       <UserCreateModal
         open={open}
         onClose={() => setOpen(false)}
-        onCreated={(payload: CreatedPayload) => {
+        onCreated={(payload?: CreatedPayload) => {
           setOpen(false);
           load();
 
-          const msg = buildInvite(
-            payload?.email,
-            payload?.tempPassword
-          );
-
+          const msg = buildInvite(payload?.email, payload?.tempPassword);
           if (msg) setInviteText(msg);
         }}
       />
