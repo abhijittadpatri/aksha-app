@@ -1,7 +1,7 @@
 {
   "name": "Aksha",
   "short_name": "Aksha",
-  "description": "Aksha clinic operations",
+  "description": "Aksha Clinic Chain OS",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",

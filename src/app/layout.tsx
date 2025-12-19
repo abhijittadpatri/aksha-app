@@ -3,12 +3,27 @@ import "./globals.css";
 import type { Metadata } from "next";
 import Script from "next/script";
 
-export const metadata: Metadata = {
+<head>
+  <link rel="manifest" href="/manifest.webmanifest" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<meta name="theme-color" content="#111111" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+</head>
+
+export const metadata = {
   title: "Aksha",
-  description: "Aksha clinic operations",
+  applicationName: "Aksha",
   manifest: "/manifest.webmanifest",
   themeColor: "#111111",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Aksha",
+  },
 };
+
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
