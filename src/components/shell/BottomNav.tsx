@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 
 type Me = {
-  role: "ADMIN" | "OWNER" | "DOCTOR" | "BILLING";
+  role: "ADMIN" | "SHOP_OWNER" | "DOCTOR" | "BILLING";
 };
 
 function Tab({
@@ -49,33 +49,45 @@ export default function BottomNav() {
   const tabs = useMemo(() => {
     const role = me?.role;
 
-    const items: { href: string; label: string; roles?: string[] }[] = [
+    // IMPORTANT: schema uses SHOP_OWNER (not OWNER)
+    const items: { href: string; label: string; roles?: Me["role"][] }[] = [
       { href: "/dashboard", label: "Home" },
-      { href: "/patients", label: "Patients", roles: ["ADMIN", "OWNER", "DOCTOR", "BILLING"] },
-      { href: "/invoices", label: "Invoices", roles: ["ADMIN", "OWNER", "BILLING"] },
-      { href: "/users", label: "Users", roles: ["ADMIN", "OWNER"] },
+      { href: "/patients", label: "Patients", roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"] },
+      { href: "/invoices", label: "Invoices", roles: ["ADMIN", "SHOP_OWNER", "BILLING"] },
+      { href: "/users", label: "Users", roles: ["ADMIN", "SHOP_OWNER"] },
     ];
 
     return items.filter((it) => !it.roles || (role && it.roles.includes(role)));
   }, [me?.role]);
 
-  // Hide on desktop, hide when not logged in, hide on login routes
-  if (pathname.startsWith("/login") || pathname.startsWith("/change-password"))
-    return null;
+  // Hide on login routes
+  if (pathname.startsWith("/login") || pathname.startsWith("/change-password")) return null;
+  // Hide when not logged in
   if (me === null) return null;
+
+  // Keep 4 columns (your current layout expects that)
+  // If fewer than 4 tabs, we pad with invisible placeholders to preserve spacing.
+  const paddedTabs = (() => {
+    const t = [...tabs];
+    while (t.length < 4) t.push({ href: "#", label: "", roles: [] as any });
+    return t.slice(0, 4);
+  })();
 
   return (
     <nav className="md:hidden sticky bottom-0 z-40 border-t bg-white/90 backdrop-blur">
       <div className="grid grid-cols-4">
-        {tabs.map((t) => (
-          <Tab
-            key={t.href}
-            href={t.href}
-            label={t.label}
-            active={pathname === t.href || pathname.startsWith(t.href + "/")}
-          />
-        ))}
-        {/* If fewer than 4 tabs, grid still ok; empty cells not needed */}
+        {paddedTabs.map((t) =>
+          t.href === "#" ? (
+            <div key={`pad-${Math.random()}`} />
+          ) : (
+            <Tab
+              key={t.href}
+              href={t.href}
+              label={t.label}
+              active={pathname === t.href || pathname.startsWith(t.href + "/")}
+            />
+          )
+        )}
       </div>
     </nav>
   );

@@ -8,7 +8,7 @@ type Me = {
   id: string;
   name?: string | null;
   email: string;
-  role: "ADMIN" | "OWNER" | "DOCTOR" | "BILLING";
+  role: "ADMIN" | "SHOP_OWNER" | "DOCTOR" | "BILLING";
   tenant?: { name?: string | null } | null;
   stores?: { id: string; name: string; city?: string | null }[];
 };
@@ -61,14 +61,15 @@ export default function Sidebar() {
   const nav = useMemo(() => {
     const role = me?.role;
 
-    const items: { href: string; label: string; roles?: string[] }[] = [
+    // NOTE: schema uses SHOP_OWNER (not OWNER)
+    const items: { href: string; label: string; roles?: Me["role"][] }[] = [
       { href: "/dashboard", label: "Dashboard" },
-      { href: "/patients", label: "Patients", roles: ["ADMIN", "OWNER", "DOCTOR", "BILLING"] },
-      { href: "/invoices", label: "Invoices", roles: ["ADMIN", "OWNER", "BILLING"] },
-      { href: "/users", label: "Users", roles: ["ADMIN", "OWNER"] },
+      { href: "/patients", label: "Patients", roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"] },
+      { href: "/invoices", label: "Invoices", roles: ["ADMIN", "SHOP_OWNER", "BILLING"] },
+      { href: "/users", label: "Users", roles: ["ADMIN", "SHOP_OWNER"] },
     ];
 
-    return items.filter((it) => !it.roles || (role && it.roles.includes(role)));
+    return items.filter((it) => !it.roles || (role ? it.roles.includes(role) : false));
   }, [me?.role]);
 
   async function logout() {
@@ -80,7 +81,7 @@ export default function Sidebar() {
   const activeStoreId =
     typeof window !== "undefined" ? localStorage.getItem("activeStoreId") : "";
 
-  // Hide sidebar while not logged in (no flash)
+  // Hide sidebar while not logged in
   if (me === null) return null;
 
   return (
@@ -89,9 +90,7 @@ export default function Sidebar() {
       <div className="flex items-start justify-between">
         <div>
           <div className="text-lg font-semibold leading-tight">Aksha</div>
-          <div className="text-xs text-gray-500">
-            {me?.tenant?.name ?? "Clinic Chain"}
-          </div>
+          <div className="text-xs text-gray-500">{me?.tenant?.name ?? "Clinic Chain"}</div>
         </div>
 
         {me?.role && (
@@ -143,9 +142,7 @@ export default function Sidebar() {
       {me ? (
         <div className="border-t pt-3 flex items-center justify-between">
           <div className="min-w-0">
-            <div className="text-sm font-medium truncate">
-              {me.name || me.email}
-            </div>
+            <div className="text-sm font-medium truncate">{me.name || me.email}</div>
             <div className="text-xs text-gray-500 truncate">{me.email}</div>
           </div>
 
