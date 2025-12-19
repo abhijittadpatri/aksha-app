@@ -19,16 +19,25 @@ export async function GET(req: Request) {
 
     if (!user) return NextResponse.json({ user: null });
 
-    // 🔑 OWNER sees ALL stores in tenant
-    let stores = user.stores.map((s) => s.store);
+    const role = String(user.role ?? "").toUpperCase();
 
-    if (user.role === "OWNER") {
-      const allStores = await prisma.store.findMany({
+    // Default: only stores explicitly linked to user
+    let stores = (user.stores ?? []).map((s) => s.store);
+
+    // SHOP_OWNER: all stores in the tenant
+    if (role === "SHOP_OWNER") {
+      stores = await prisma.store.findMany({
         where: { tenantId: user.tenantId },
         orderBy: { name: "asc" },
       });
-      stores = allStores;
     }
+
+    // Return a minimal store shape (keeps payload small & consistent)
+    const storePayload = stores.map((s) => ({
+      id: s.id,
+      name: s.name,
+      city: s.city ?? null,
+    }));
 
     return NextResponse.json({
       user: {
@@ -37,8 +46,8 @@ export async function GET(req: Request) {
         name: user.name,
         role: user.role,
         mustChangePassword: user.mustChangePassword,
-        tenant: user.tenant,
-        stores,
+        tenant: user.tenant ? { id: user.tenant.id, name: user.tenant.name } : null,
+        stores: storePayload,
       },
     });
   } catch (e: any) {
