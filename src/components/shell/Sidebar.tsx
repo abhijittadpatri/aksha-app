@@ -45,12 +45,26 @@ export default function Sidebar() {
       try {
         const res = await fetch("/api/me", { credentials: "include" });
         const data = await res.json().catch(() => ({}));
-        setMe(data.user ?? null);
+        const user = data.user ?? null;
+        setMe(user);
 
-        // ensure active store selected
-        if (data.user?.stores?.length) {
+        // Ensure active store selected
+        if (user?.stores?.length) {
           const saved = localStorage.getItem("activeStoreId");
-          if (!saved) localStorage.setItem("activeStoreId", data.user.stores[0].id);
+
+          // ✅ If SHOP_OWNER: default to "all" if nothing saved
+          if (!saved) {
+            if (user.role === "SHOP_OWNER") {
+              localStorage.setItem("activeStoreId", "all");
+            } else {
+              localStorage.setItem("activeStoreId", user.stores[0].id);
+            }
+          }
+
+          // ✅ If non-owner accidentally has "all", normalize to first store
+          if (saved === "all" && user.role !== "SHOP_OWNER") {
+            localStorage.setItem("activeStoreId", user.stores[0].id);
+          }
         }
       } catch {
         setMe(null);
@@ -61,15 +75,14 @@ export default function Sidebar() {
   const nav = useMemo(() => {
     const role = me?.role;
 
-    // NOTE: schema uses SHOP_OWNER (not OWNER)
-    const items: { href: string; label: string; roles?: Me["role"][] }[] = [
+    const items: { href: string; label: string; roles?: Array<Me["role"]> }[] = [
       { href: "/dashboard", label: "Dashboard" },
       { href: "/patients", label: "Patients", roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"] },
       { href: "/invoices", label: "Invoices", roles: ["ADMIN", "SHOP_OWNER", "BILLING"] },
       { href: "/users", label: "Users", roles: ["ADMIN", "SHOP_OWNER"] },
     ];
 
-    return items.filter((it) => !it.roles || (role ? it.roles.includes(role) : false));
+    return items.filter((it) => !it.roles || (role && it.roles.includes(role)));
   }, [me?.role]);
 
   async function logout() {
@@ -81,8 +94,10 @@ export default function Sidebar() {
   const activeStoreId =
     typeof window !== "undefined" ? localStorage.getItem("activeStoreId") : "";
 
-  // Hide sidebar while not logged in
+  // Hide sidebar while not logged in (no flash)
   if (me === null) return null;
+
+  const isOwner = me?.role === "SHOP_OWNER";
 
   return (
     <aside className="hidden md:flex w-72 border-r bg-white p-4 flex-col gap-4">
@@ -104,20 +119,39 @@ export default function Sidebar() {
       {me?.stores?.length ? (
         <div className="space-y-1">
           <div className="text-xs text-gray-500">Active Store</div>
+
           <select
             className="w-full border rounded-xl px-3 py-2 text-sm"
             value={activeStoreId ?? ""}
             onChange={(e) => {
-              localStorage.setItem("activeStoreId", e.target.value);
+              const v = e.target.value;
+
+              // ✅ Only SHOP_OWNER can pick "all"
+              if (v === "all" && !isOwner) return;
+
+              localStorage.setItem("activeStoreId", v);
               router.refresh();
             }}
           >
+            {/* ✅ Owner-only consolidated option */}
+            {isOwner && (
+              <option value="all">
+                All Stores (Consolidated)
+              </option>
+            )}
+
             {me.stores.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name} {s.city ? `(${s.city})` : ""}
               </option>
             ))}
           </select>
+
+          {isOwner && (
+            <div className="text-[11px] text-gray-500">
+              Tip: Select <span className="font-medium">All Stores</span> to see consolidated dashboard totals.
+            </div>
+          )}
         </div>
       ) : (
         <div className="text-xs text-gray-500">Loading stores…</div>

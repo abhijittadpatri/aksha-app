@@ -30,10 +30,22 @@ function safeNumber(v: any) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function isPaidStatus(paymentStatus: any) {
+  const ps = String(paymentStatus ?? "").trim().toLowerCase();
+  return ps === "paid";
+}
+
+function isUnpaidStatus(paymentStatus: any) {
+  const ps = String(paymentStatus ?? "").trim().toLowerCase();
+  return ps === "unpaid";
+}
+
 export async function GET(req: NextRequest) {
   try {
     const userId = getUserId(req);
-    if (!userId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    if (!userId) {
+      return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    }
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -43,7 +55,9 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    if (!user) return NextResponse.json({ error: "User not found" }, { status: 401 });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 401 });
+    }
 
     const allowedStoreIds = (user.stores ?? []).map((s) => s.storeId);
     if (allowedStoreIds.length === 0) {
@@ -53,12 +67,15 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const storeIdParam = url.searchParams.get("storeId");
 
-    const isOwner = user.role === "OWNER";
+    // ✅ Your schema role is SHOP_OWNER (not OWNER)
+    const isOwner = user.role === "SHOP_OWNER";
     const isAllStores = isOwner && storeIdParam === "all";
 
     // If not ALL, enforce storeId within allowed stores
     const storeId =
-      storeIdParam && allowedStoreIds.includes(storeIdParam) ? storeIdParam : allowedStoreIds[0];
+      storeIdParam && allowedStoreIds.includes(storeIdParam)
+        ? storeIdParam
+        : allowedStoreIds[0];
 
     const { startUtc, endUtc } = todayRangeIST();
 
@@ -71,15 +88,16 @@ export async function GET(req: NextRequest) {
 
     const invoicesToday = await prisma.invoice.count({ where: baseWhere });
 
-    // NOTE: your schema says paymentStatus default("Unpaid") — normalize checks safely
+    // Count unpaid invoices today (normalize to schema default "Unpaid")
     const unpaidInvoicesToday = await prisma.invoice.count({
       where: {
         ...baseWhere,
-        paymentStatus: { in: ["UNPAID", "Unpaid"] },
+        // Prisma string enum not enforced here, so we filter in DB broadly:
+        paymentStatus: { in: ["Unpaid", "UNPAID", "unpaid", "UNPAID "] },
       },
     });
 
-    // Pull today's invoices and sum totals from totalsJson (TS-safe)
+    // Pull today's invoices and sum totals from totalsJson (TS-safe, no Prisma _sum typing issues)
     const todayInvoices = await prisma.invoice.findMany({
       where: baseWhere,
       select: {
@@ -97,8 +115,9 @@ export async function GET(req: NextRequest) {
 
       todaySalesGross += total;
 
-      const ps = String(inv.paymentStatus ?? "").toLowerCase();
-      if (ps === "paid") todaySalesPaid += total;
+      if (isPaidStatus(inv.paymentStatus)) {
+        todaySalesPaid += total;
+      }
     }
 
     // Response store label
@@ -120,6 +139,9 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "Metrics error" }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message ?? "Metrics error" },
+      { status: 500 }
+    );
   }
 }
