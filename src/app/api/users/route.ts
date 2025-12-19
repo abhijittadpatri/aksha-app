@@ -38,23 +38,23 @@ async function requireAuthed(req: NextRequest): Promise<AuthedUser> {
 }
 
 function isOwner(role: string) {
-  return role === "OWNER";
+  return role === "SHOP_OWNER";
 }
 function isAdmin(role: string) {
   return role === "ADMIN";
 }
 
 function canCreateRole(creatorRole: string, targetRole: string) {
-  // Owners are created manually ONLY
-  if (targetRole === "OWNER") return false;
+  // Rule: Only SHOP_OWNER can create SHOP_OWNER (optional but safe)
+  if (targetRole === "SHOP_OWNER") return creatorRole === "SHOP_OWNER";
 
-  if (creatorRole === "OWNER") {
-    // Owner can create everyone except Owner
+  if (creatorRole === "SHOP_OWNER") {
+    // Owner can create everyone (including ADMIN)
     return ["ADMIN", "DOCTOR", "BILLING"].includes(targetRole);
   }
 
   if (creatorRole === "ADMIN") {
-    // Admin can create doctor/billing only
+    // Admin can create only doctor/billing
     return ["DOCTOR", "BILLING"].includes(targetRole);
   }
 
@@ -72,8 +72,9 @@ function validateTempPassword(pw: string) {
 }
 
 // ---- GET /api/users ----
-// Returns tenant users. For ADMIN, we scope to users who share at least 1 store with the admin.
-// For OWNER, return all users in tenant.
+// Returns tenant users.
+// - SHOP_OWNER: all tenant users
+// - ADMIN: only users who share >=1 store with admin
 export async function GET(req: NextRequest) {
   try {
     const me = await requireAuthed(req);
@@ -82,7 +83,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // OWNER: all tenant users
+    // SHOP_OWNER: all tenant users
     if (isOwner(me.role)) {
       const users = await prisma.user.findMany({
         where: { tenantId: me.tenantId },
@@ -135,9 +136,9 @@ export async function GET(req: NextRequest) {
 
 // ---- POST /api/users ----
 // Create user with temp password + mustChangePassword=true
-// - OWNER cannot be created here (manual only)
-// - ADMIN cannot create ADMIN/OWNER
-// - StoreIds must be within creator’s store access unless creator is OWNER
+// - Only SHOP_OWNER can create SHOP_OWNER
+// - ADMIN cannot create ADMIN/SHOP_OWNER
+// - StoreIds must be within creator’s store access unless creator is SHOP_OWNER
 export async function POST(req: NextRequest) {
   try {
     const me = await requireAuthed(req);
@@ -158,10 +159,11 @@ export async function POST(req: NextRequest) {
 
     // Enforce role policy
     if (!canCreateRole(me.role, role)) {
-      return NextResponse.json(
-        { error: role === "OWNER" ? "Owners must be created manually" : "Not allowed to create this role" },
-        { status: 403 }
-      );
+      const msg =
+        role === "SHOP_OWNER"
+          ? "Only the chain owner can create another Owner."
+          : "Not allowed to create this role";
+      return NextResponse.json({ error: msg }, { status: 403 });
     }
 
     // Enforce store scoping
@@ -172,7 +174,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "You can only assign users to your stores" }, { status: 403 });
       }
     } else {
-      // OWNER: ensure stores belong to tenant (safety)
+      // SHOP_OWNER: ensure stores belong to tenant (safety)
       const count = await prisma.store.count({
         where: { id: { in: storeIds }, tenantId: me.tenantId },
       });
@@ -184,7 +186,7 @@ export async function POST(req: NextRequest) {
     const pwErr = validateTempPassword(tempPassword);
     if (pwErr) return NextResponse.json({ error: pwErr }, { status: 400 });
 
-    // Prevent duplicates
+    // Prevent duplicates (email is unique in schema)
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       return NextResponse.json({ error: "Email already exists" }, { status: 409 });
@@ -198,7 +200,6 @@ export async function POST(req: NextRequest) {
         email,
         name,
         role: role as any,
-        // These fields must exist in your schema (you said migration done + visible)
         passwordHash,
         mustChangePassword: true,
         stores: {
