@@ -7,29 +7,45 @@ function getUserId(req: NextRequest) {
   return getCookieFromHeader(cookieHeader, SESSION_COOKIE_NAME);
 }
 
-async function requireAdmin(req: NextRequest) {
-  const userId = getUserId(req);
-  if (!userId) return null;
-
-  const me = await prisma.user.findUnique({
-    where: { id: userId },
-  });
-
-  if (!me) return null;
-
-  const role = String(me.role || "").toUpperCase();
-  if (role !== "ADMIN" && role !== "OWNER") return null;
-
-  return me;
+function roleOf(v: any) {
+  return String(v ?? "").toUpperCase();
 }
 
 export async function GET(req: NextRequest) {
   try {
-    const me = await requireAdmin(req);
+    const userId = getUserId(req);
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const me = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { stores: true },
+    });
+
     if (!me) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    const role = roleOf(me.role);
+
+    // ✅ Allow only Admin + Shop Owner for now
+    if (role !== "ADMIN" && role !== "SHOP_OWNER") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // ✅ SHOP_OWNER sees all tenant stores
+    if (role === "SHOP_OWNER") {
+      const stores = await prisma.store.findMany({
+        where: { tenantId: me.tenantId },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, name: true, city: true },
+      });
+
+      return NextResponse.json({ stores });
+    }
+
+    // ✅ ADMIN: only stores they are assigned to
+    const allowedStoreIds = (me.stores ?? []).map((s) => s.storeId);
+
     const stores = await prisma.store.findMany({
-      where: { tenantId: me.tenantId },
+      where: { tenantId: me.tenantId, id: { in: allowedStoreIds } },
       orderBy: { createdAt: "desc" },
       select: { id: true, name: true, city: true },
     });
