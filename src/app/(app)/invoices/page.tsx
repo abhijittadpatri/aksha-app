@@ -8,9 +8,23 @@ function money(n: any) {
   return x.toFixed(2);
 }
 
+function safeDate(d: any) {
+  try {
+    return d ? new Date(d).toLocaleString() : "";
+  } catch {
+    return "";
+  }
+}
+
+type Me = {
+  role: "ADMIN" | "SHOP_OWNER" | "DOCTOR" | "BILLING";
+};
+
 export default function InvoicesPage() {
+  const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const activeStoreId =
     typeof window !== "undefined" ? localStorage.getItem("activeStoreId") : "";
@@ -20,8 +34,25 @@ export default function InvoicesPage() {
     return `?storeId=${encodeURIComponent(activeStoreId)}`;
   }, [activeStoreId]);
 
+  const canView = useMemo(() => {
+    const role = me?.role;
+    return role === "BILLING" || role === "ADMIN" || role === "SHOP_OWNER";
+  }, [me?.role]);
+
+  async function loadMe() {
+    try {
+      const res = await fetch("/api/me", { credentials: "include" });
+      const data = await res.json().catch(() => ({}));
+      setMe((data.user as Me) ?? null);
+    } catch {
+      setMe(null);
+    }
+  }
+
   async function load() {
     setErr(null);
+    setLoading(true);
+
     try {
       const res = await fetch(`/api/invoices${qs}`, { credentials: "include" });
       const text = await res.text();
@@ -43,13 +74,34 @@ export default function InvoicesPage() {
     } catch (e: any) {
       setErr(e?.message ?? "Failed to load invoices");
       setInvoices([]);
+    } finally {
+      setLoading(false);
     }
   }
 
   useEffect(() => {
+    loadMe();
+  }, []);
+
+  useEffect(() => {
+    // Only load after we know user (prevents flash/unauthorized calls)
+    if (me === undefined) return;
+    if (me === null) return;
+    if (!canView) return;
+
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qs]);
+  }, [me?.role, qs]);
+
+  // Redirect guards
+  if (me === null) {
+    if (typeof window !== "undefined") window.location.href = "/login";
+    return null;
+  }
+  if (me && !canView) {
+    if (typeof window !== "undefined") window.location.href = "/dashboard";
+    return null;
+  }
 
   return (
     <main className="p-4 md:p-6">
@@ -58,8 +110,18 @@ export default function InvoicesPage() {
           <div>
             <h1 className="h1">Invoices</h1>
             <p className="subtle">
-              Latest invoices {activeStoreId === "all" ? "(All Stores)" : ""}
+              Latest invoices{" "}
+              {activeStoreId === "all" ? "(All Stores)" : activeStoreId ? "" : "(Select a store)"}
             </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Link className="btn" href="/patients">
+              Go to Patients
+            </Link>
+            <button className="btn" onClick={load} disabled={loading}>
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
           </div>
         </div>
 
@@ -75,13 +137,15 @@ export default function InvoicesPage() {
               <div className="text-right">Open</div>
             </div>
 
+            {loading && invoices.length === 0 && !err && (
+              <div className="p-4 text-sm text-gray-500">Loading invoices…</div>
+            )}
+
             {invoices.map((inv) => (
               <div key={inv.id} className="grid grid-cols-5 p-3 text-sm border-t">
                 <div className="min-w-0">
                   <div className="font-medium truncate">{inv.invoiceNo ?? "Invoice"}</div>
-                  <div className="text-xs text-gray-500">
-                    {inv.createdAt ? new Date(inv.createdAt).toLocaleString() : ""}
-                  </div>
+                  <div className="text-xs text-gray-500">{safeDate(inv.createdAt)}</div>
                 </div>
 
                 <div className="min-w-0">
@@ -109,7 +173,7 @@ export default function InvoicesPage() {
               </div>
             ))}
 
-            {invoices.length === 0 && !err && (
+            {!loading && invoices.length === 0 && !err && (
               <div className="p-4 text-sm text-gray-500">No invoices yet.</div>
             )}
           </div>

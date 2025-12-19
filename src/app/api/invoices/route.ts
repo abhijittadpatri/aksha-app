@@ -24,12 +24,21 @@ async function requireUser(req: NextRequest) {
   });
   if (!user) throw new Error("User not found");
 
-  const allowedStoreIds = (user.stores ?? []).map((s) => s.storeId);
+  // For SHOP_OWNER, we allow all stores in the tenant
+  let allowedStoreIds = (user.stores ?? []).map((s) => s.storeId);
+
+  if (user.role === "SHOP_OWNER") {
+    const allStores = await prisma.store.findMany({
+      where: { tenantId: user.tenantId },
+      select: { id: true },
+    });
+    allowedStoreIds = allStores.map((s) => s.id);
+  }
 
   return {
     id: user.id,
     tenantId: user.tenantId,
-    role: user.role,
+    role: user.role as any,
     allowedStoreIds,
   };
 }
@@ -40,8 +49,8 @@ function safeNumber(v: any) {
 }
 
 // GET /api/invoices?patientId=...&storeId=...
-// ✅ patientId is OPTIONAL
-// ✅ storeId can be "all" for SHOP_OWNER
+// patientId OPTIONAL
+// storeId can be "all" for SHOP_OWNER
 export async function GET(req: NextRequest) {
   try {
     const user = await requireUser(req);
@@ -50,43 +59,33 @@ export async function GET(req: NextRequest) {
     const patientId = url.searchParams.get("patientId");
     const storeIdParam = url.searchParams.get("storeId");
 
-    // Owner can view "all" stores (within their allowed stores set)
     const isOwner = user.role === "SHOP_OWNER";
     const isAllStores = isOwner && storeIdParam === "all";
 
-    // Decide store scope
-    let storeFilter: any = undefined;
+    // Store scope
+    let storeWhere: any = undefined;
 
     if (isAllStores) {
-      // All stores owner has access to
-      storeFilter = { in: user.allowedStoreIds };
+      storeWhere = { in: user.allowedStoreIds };
     } else if (storeIdParam) {
-      // Single store; must be allowed
       if (!user.allowedStoreIds.includes(storeIdParam)) {
         return NextResponse.json({ error: "No store access" }, { status: 403 });
       }
-      storeFilter = storeIdParam;
+      storeWhere = storeIdParam;
     } else {
-      // Default to first allowed store (safe fallback)
       if (!user.allowedStoreIds.length) {
         return NextResponse.json({ error: "No store access" }, { status: 403 });
       }
-      storeFilter = user.allowedStoreIds[0];
+      storeWhere = user.allowedStoreIds[0];
     }
 
-    // Build WHERE
     const where: any = {
       tenantId: user.tenantId,
-      ...(storeFilter
-        ? typeof storeFilter === "string"
-          ? { storeId: storeFilter }
-          : { storeId: storeFilter }
-        : {}),
+      ...(storeWhere ? { storeId: storeWhere } : {}),
     };
 
-    // ✅ Only filter by patientId if provided
+    // Optional patient filter
     if (patientId) {
-      // Ensure patient belongs to tenant (so random IDs don't leak existence)
       const patient = await prisma.patient.findFirst({
         where: { id: patientId, tenantId: user.tenantId },
         select: { id: true },
@@ -99,6 +98,7 @@ export async function GET(req: NextRequest) {
     const invoices = await prisma.invoice.findMany({
       where,
       orderBy: { createdAt: "desc" },
+      take: patientId ? 200 : 100, // list page: limit to recent; patient view: allow more
       include: {
         patient: { select: { id: true, name: true, mobile: true } },
         store: { select: { id: true, name: true, city: true } },
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/invoices { patientId, storeId, orderId, discount, paid, paymentMode }
-// ✅ Enforce store access; owner can create for any allowed store, admin for allowed, billing for allowed
+// Enforce store access; billing/admin/owner can create within allowed stores
 export async function POST(req: NextRequest) {
   try {
     const user = await requireUser(req);
@@ -139,12 +139,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Store access check (owner/admin/billing can only create within allowed stores)
     if (!user.allowedStoreIds.includes(storeId)) {
       return NextResponse.json({ error: "No store access" }, { status: 403 });
     }
 
-    // Validate patient within tenant and store (optional: you can remove store check if patient is chain-wide)
     const patient = await prisma.patient.findFirst({
       where: { id: patientId, tenantId: user.tenantId },
       select: { id: true },
@@ -183,7 +181,6 @@ export async function POST(req: NextRequest) {
           paid,
           paymentMode: paymentMode || "Cash",
         },
-        // Your schema default is "Unpaid" — keep consistent casing
         paymentStatus: paid ? "Paid" : "Unpaid",
       },
     });
