@@ -69,14 +69,18 @@ export default function BottomNav() {
     setMoreOpen(false);
   }, [pathname]);
 
+  // Hide on auth routes
+  if (pathname.startsWith("/login") || pathname.startsWith("/change-password")) return null;
+  if (me === null) return null;
+
   const tabs = useMemo(() => {
     const role = me?.role;
 
     const items: TabItem[] = [
       { href: "/dashboard", label: "Home" },
-      { href: "/insights", label: "Insights", roles: ["ADMIN", "SHOP_OWNER"] },
       { href: "/patients", label: "Patients", roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"] },
       { href: "/invoices", label: "Invoices", roles: ["ADMIN", "SHOP_OWNER", "BILLING"] },
+      { href: "/insights", label: "Insights", roles: ["ADMIN", "SHOP_OWNER"] },
       { href: "/users", label: "Users", roles: ["ADMIN", "SHOP_OWNER"] },
       { href: "/stores", label: "Stores", roles: ["ADMIN", "SHOP_OWNER"] },
     ];
@@ -84,34 +88,25 @@ export default function BottomNav() {
     return items.filter((it) => !it.roles || (role && it.roles.includes(role)));
   }, [me?.role]);
 
-  // Hide on auth routes
-  if (pathname.startsWith("/login") || pathname.startsWith("/change-password")) return null;
-  if (me === null) return null;
-
-  // Show at most 4 items on the bar. Everything else goes into "More".
-  // Priority order: Home, Patients, Invoices, Insights (if allowed), then More.
-  const prioritized = useMemo(() => {
+  // Show at most 3 items on the bar + "More" as 4th when overflow exists.
+  const { barTabs, overflowTabs, needsMore } = useMemo(() => {
     const byHref = new Map(tabs.map((t) => [t.href, t]));
     const order = ["/dashboard", "/patients", "/invoices", "/insights"];
-    const main: TabItem[] = [];
 
+    const main: TabItem[] = [];
     for (const href of order) {
       const t = byHref.get(href);
       if (t) main.push(t);
     }
 
-    // Fill remaining slots (up to 3) from remaining tabs, then we add More as 4th.
     const remaining = tabs.filter((t) => !main.some((m) => m.href === t.href));
+    const _needsMore = remaining.length > 0 || main.length > 4;
 
-    // We want "More" if there are leftovers or if main already uses 4 slots.
-    // We'll keep at most 3 real tabs and reserve the 4th slot for More when needed.
-    const needsMore = remaining.length > 0 || main.length > 4;
+    const _barTabs = (() => {
+      if (!_needsMore) return main.slice(0, 4);
 
-    const barTabs = (() => {
-      if (!needsMore) return main.slice(0, 4);
-      // keep 3 on bar, 4th = More
+      // keep 3 on bar; 4th is More
       const firstThree = main.slice(0, 3);
-      // if we have fewer than 3, top up from remaining
       let i = 0;
       while (firstThree.length < 3 && i < remaining.length) {
         firstThree.push(remaining[i++]);
@@ -119,31 +114,57 @@ export default function BottomNav() {
       return firstThree;
     })();
 
-    const overflowTabs = (() => {
-      if (!needsMore) return [];
-      const used = new Set(barTabs.map((t) => t.href));
-      return tabs.filter((t) => !used.has(t.href));
-    })();
+    const used = new Set(_barTabs.map((t) => t.href));
+    const _overflowTabs = _needsMore ? tabs.filter((t) => !used.has(t.href)) : [];
 
-    return { barTabs, overflowTabs, needsMore };
+    return { barTabs: _barTabs, overflowTabs: _overflowTabs, needsMore: _needsMore };
   }, [tabs]);
 
-  const moreIsActive = prioritized.overflowTabs.some((t) => isActivePath(pathname, t.href));
+  const moreIsActive = overflowTabs.some((t) => isActivePath(pathname, t.href));
 
   return (
     <>
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t bg-white/90 backdrop-blur">
+      {/* Overlay (tap outside to close) */}
+      {needsMore && moreOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/20"
+          onClick={() => setMoreOpen(false)}
+        />
+      )}
+
+      {/* More Sheet (fixed overlay above the bottom bar) */}
+      {needsMore && moreOpen && (
+        <div className="md:hidden fixed left-0 right-0 bottom-14 z-50">
+          <div className="mx-3 mb-2 rounded-2xl border bg-white shadow-lg overflow-hidden">
+            <div className="p-2 grid grid-cols-2 gap-2">
+              {overflowTabs.map((t) => (
+                <Link
+                  key={t.href}
+                  href={t.href}
+                  className={[
+                    "border rounded-xl px-3 py-2 text-sm",
+                    isActivePath(pathname, t.href)
+                      ? "bg-gray-100 font-medium"
+                      : "bg-white hover:bg-gray-50",
+                  ].join(" ")}
+                  onClick={() => setMoreOpen(false)}
+                >
+                  <div className="truncate">{t.label}</div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Bar */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t bg-white/90 backdrop-blur">
         <div className="grid grid-cols-4">
-          {prioritized.barTabs.map((t) => (
-            <Tab
-              key={t.href}
-              href={t.href}
-              label={t.label}
-              active={isActivePath(pathname, t.href)}
-            />
+          {barTabs.map((t) => (
+            <Tab key={t.href} href={t.href} label={t.label} active={isActivePath(pathname, t.href)} />
           ))}
 
-          {prioritized.needsMore ? (
+          {needsMore ? (
             <button
               type="button"
               className={[
@@ -162,37 +183,13 @@ export default function BottomNav() {
               />
             </button>
           ) : (
-            // If no "More", keep grid balanced with an empty cell
             <div />
           )}
         </div>
-
-        {/* More sheet */}
-        {prioritized.needsMore && moreOpen && (
-          <div className="border-t bg-white">
-            <div className="p-2 grid grid-cols-2 gap-2">
-              {prioritized.overflowTabs.map((t) => (
-                <Link
-                  key={t.href}
-                  href={t.href}
-                  className={[
-                    "border rounded-xl px-3 py-2 text-sm",
-                    isActivePath(pathname, t.href) ? "bg-gray-100 font-medium" : "bg-white",
-                  ].join(" ")}
-                  onClick={() => setMoreOpen(false)}
-                >
-                  {t.label}
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
       </nav>
 
       {/* Spacer so content doesn't hide behind fixed bottom nav */}
       <div className="md:hidden h-14" />
-      {/* If "More" menu is open it adds height; this spacer keeps scroll comfortable */}
-      {moreOpen ? <div className="md:hidden h-24" /> : null}
     </>
   );
 }
