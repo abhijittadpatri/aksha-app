@@ -176,28 +176,55 @@ export default function InsightsPage() {
     pill?: React.ReactNode;
   }) => {
     return (
-      <div className="card card-pad">
+      <div className="card card-pad min-w-0">
         <div className="subtle">{title}</div>
-        <div className="mt-1 font-semibold truncate">
-          {store ? store.name : "—"}
-          {store?.city ? <span className="text-gray-400"> • {store.city}</span> : null}
+        <div className="mt-1 font-semibold min-w-0">
+          <div className="truncate">
+            {store ? store.name : "—"}
+            {store?.city ? <span className="text-gray-400"> • {store.city}</span> : null}
+          </div>
         </div>
-        <div className="mt-2 text-2xl font-semibold">{primary}</div>
-        <div className="mt-2 flex items-center justify-between gap-2">
-          <div className="text-xs text-gray-500">{secondary ?? ""}</div>
+
+        <div className="mt-2 text-2xl font-semibold whitespace-nowrap">{primary}</div>
+
+        <div className="mt-2 flex items-start justify-between gap-2">
+          <div className="text-xs text-gray-500 min-w-0 truncate">{secondary ?? ""}</div>
           {pill ? <div className="shrink-0">{pill}</div> : null}
         </div>
       </div>
     );
   };
 
+  const StoreMini = ({
+    labelLeft,
+    valueLeft,
+    labelRight,
+    valueRight,
+  }: {
+    labelLeft: string;
+    valueLeft: React.ReactNode;
+    labelRight: string;
+    valueRight: React.ReactNode;
+  }) => (
+    <div className="grid grid-cols-2 gap-2">
+      <div className="border rounded-xl p-3 min-w-0">
+        <div className="subtle">{labelLeft}</div>
+        <div className="mt-1 font-semibold whitespace-nowrap">{valueLeft}</div>
+      </div>
+      <div className="border rounded-xl p-3 min-w-0">
+        <div className="subtle">{labelRight}</div>
+        <div className="mt-1 font-semibold whitespace-nowrap">{valueRight}</div>
+      </div>
+    </div>
+  );
+
   return (
     <main className="p-4 md:p-6">
       <div className="page space-y-4">
         <div className="flex items-end justify-between gap-3 flex-wrap">
-          <div>
+          <div className="min-w-0">
             <h1 className="h1">Insights</h1>
-            <p className="subtle">Scope: {scopeLabel}</p>
+            <p className="subtle truncate">Scope: {scopeLabel}</p>
           </div>
 
           <button
@@ -216,13 +243,13 @@ export default function InsightsPage() {
 
         {data && (
           <>
-            {/* Today (Tenant-wide for scope) */}
+            {/* Today */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="card card-pad">
+              <div className="card card-pad min-w-0">
                 <div className="subtle">Today • Gross Revenue</div>
-                <div className="kpi">₹{money(tenantToday?.grossRevenue?.value ?? 0)}</div>
+                <div className="kpi whitespace-nowrap">₹{money(tenantToday?.grossRevenue?.value ?? 0)}</div>
 
-                <div className="mt-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {deltaPill(
                     tenantToday?.grossRevenue?.delta ?? 0,
                     tenantToday?.grossRevenue?.deltaPct ?? 0
@@ -235,11 +262,11 @@ export default function InsightsPage() {
                 </div>
               </div>
 
-              <div className="card card-pad">
+              <div className="card card-pad min-w-0">
                 <div className="subtle">Today • Invoices</div>
                 <div className="kpi">{tenantToday?.invoiceCount?.value ?? 0}</div>
 
-                <div className="mt-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {deltaPill(
                     tenantToday?.invoiceCount?.delta ?? 0,
                     tenantToday?.invoiceCount?.deltaPct ?? 0
@@ -253,11 +280,11 @@ export default function InsightsPage() {
                 </div>
               </div>
 
-              <div className="card card-pad">
+              <div className="card card-pad min-w-0">
                 <div className="subtle">Today • Paid Revenue</div>
-                <div className="kpi">₹{money(tenantToday?.paidRevenue?.value ?? 0)}</div>
+                <div className="kpi whitespace-nowrap">₹{money(tenantToday?.paidRevenue?.value ?? 0)}</div>
 
-                <div className="mt-2">
+                <div className="mt-2 flex flex-wrap gap-2">
                   {deltaPill(
                     tenantToday?.paidRevenue?.delta ?? 0,
                     tenantToday?.paidRevenue?.deltaPct ?? 0
@@ -275,9 +302,7 @@ export default function InsightsPage() {
               <>
                 <div className="card card-pad">
                   <div className="h2">Leaderboards</div>
-                  <div className="subtle mt-1">
-                    Quick “what’s happening” across the chain.
-                  </div>
+                  <div className="subtle mt-1">Quick “what’s happening” across the chain.</div>
 
                   <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
                     <StatCard
@@ -337,13 +362,63 @@ export default function InsightsPage() {
                   </div>
                 </div>
 
+                {/* Movers: MOBILE cards + DESKTOP table */}
                 <div className="card card-pad">
                   <div className="h2">Top movers today</div>
                   <div className="subtle mt-1">
                     Sorted by Today gross Δ% (highest first). Great for quick follow-ups.
                   </div>
 
-                  <div className="mt-3 border rounded-xl overflow-hidden bg-white">
+                  {/* Mobile */}
+                  <div className="mt-3 space-y-3 md:hidden">
+                    {withStoreComputed.moversToday.map((s) => {
+                      const td = s.today?.grossRevenue;
+                      const unpaid = s.today?.unpaidCount;
+                      const up = (td?.delta ?? 0) >= 0;
+
+                      return (
+                        <div key={s.id} className="border rounded-2xl bg-white p-3 space-y-2">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{s.name}</div>
+                            <div className="text-xs text-gray-500 truncate">{s.city ?? ""}</div>
+                          </div>
+
+                          <StoreMini
+                            labelLeft="Today Gross"
+                            valueLeft={`₹${money(td?.value ?? 0)}`}
+                            labelRight="Unpaid"
+                            valueRight={
+                              <span className="text-xs px-2 py-1 rounded-full bg-gray-100">
+                                {unpaid?.value ?? 0}
+                              </span>
+                            }
+                          />
+
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <span
+                              className={cls(
+                                "text-xs px-2 py-1 rounded-full whitespace-nowrap",
+                                up ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
+                              )}
+                            >
+                              Δ Gross: {signedMoney(td?.delta ?? 0)}
+                            </span>
+
+                            <span className="text-xs text-gray-600 whitespace-nowrap">
+                              Δ %: {pct(td?.deltaPct ?? null)}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {withStoreComputed.moversToday.length === 0 && (
+                      <div className="p-4 text-sm text-gray-500">No store data yet.</div>
+                    )}
+                  </div>
+
+                  {/* Desktop */}
+                  <div className="mt-3 border rounded-xl overflow-hidden bg-white hidden md:block">
                     <div className="grid grid-cols-12 bg-gray-50 text-xs font-medium p-3">
                       <div className="col-span-4">Store</div>
                       <div className="col-span-2 text-right">Today Gross</div>
@@ -370,7 +445,7 @@ export default function InsightsPage() {
                           <div className="col-span-2 text-right">
                             <span
                               className={cls(
-                                "text-xs px-2 py-1 rounded-full",
+                                "text-xs px-2 py-1 rounded-full whitespace-nowrap",
                                 (td?.delta ?? 0) >= 0
                                   ? "bg-green-50 text-green-800"
                                   : "bg-red-50 text-red-800"
@@ -383,7 +458,7 @@ export default function InsightsPage() {
                           <div className="col-span-2 text-right">{pct(td?.deltaPct ?? null)}</div>
 
                           <div className="col-span-2 text-right">
-                            <span className="text-xs px-2 py-1 rounded-full bg-gray-100">
+                            <span className="text-xs px-2 py-1 rounded-full bg-gray-100 whitespace-nowrap">
                               {unpaid?.value ?? 0}
                             </span>
                           </div>
@@ -399,7 +474,7 @@ export default function InsightsPage() {
               </>
             )}
 
-            {/* Month (This month vs last month) */}
+            {/* Month overview */}
             <div className="card card-pad">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
@@ -407,23 +482,25 @@ export default function InsightsPage() {
                   <div className="subtle mt-1">This month vs last month.</div>
                 </div>
 
-                {deltaPill(
-                  tenantMonth?.grossRevenue?.delta ?? 0,
-                  tenantMonth?.grossRevenue?.deltaPct ?? 0
-                )}
+                <div className="shrink-0">
+                  {deltaPill(
+                    tenantMonth?.grossRevenue?.delta ?? 0,
+                    tenantMonth?.grossRevenue?.deltaPct ?? 0
+                  )}
+                </div>
               </div>
 
               <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div className="border rounded-xl p-3">
                   <div className="subtle">This Month • Gross</div>
-                  <div className="text-lg font-semibold">
+                  <div className="text-lg font-semibold whitespace-nowrap">
                     ₹{money(tenantMonth?.grossRevenue?.value ?? 0)}
                   </div>
                 </div>
 
                 <div className="border rounded-xl p-3">
                   <div className="subtle">This Month • Paid</div>
-                  <div className="text-lg font-semibold">
+                  <div className="text-lg font-semibold whitespace-nowrap">
                     ₹{money(tenantMonth?.paidRevenue?.value ?? 0)}
                   </div>
                 </div>
@@ -437,7 +514,7 @@ export default function InsightsPage() {
 
                 <div className="border rounded-xl p-3">
                   <div className="subtle">This Month • Avg Invoice</div>
-                  <div className="text-lg font-semibold">
+                  <div className="text-lg font-semibold whitespace-nowrap">
                     ₹{money(tenantMonth?.avgInvoiceValue?.value ?? 0)}
                   </div>
                 </div>
@@ -453,7 +530,7 @@ export default function InsightsPage() {
               </div>
             </div>
 
-            {/* Per-store breakdown when ALL stores */}
+            {/* Per-store breakdown: MOBILE cards + DESKTOP table */}
             {activeStoreId === "all" && (
               <div className="card card-pad">
                 <div className="h2">Per-store breakdown</div>
@@ -461,7 +538,46 @@ export default function InsightsPage() {
                   Sorted by this month gross revenue (top performers first).
                 </div>
 
-                <div className="mt-3 border rounded-xl overflow-hidden bg-white">
+                {/* Mobile */}
+                <div className="mt-3 space-y-3 md:hidden">
+                  {sortedStoresByMonthGross.map((s) => {
+                    const td = s.today?.grossRevenue;
+                    const mo = s.month?.grossRevenue;
+
+                    return (
+                      <div key={s.id} className="border rounded-2xl bg-white p-3 space-y-2">
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{s.name}</div>
+                          <div className="text-xs text-gray-500 truncate">{s.city ?? ""}</div>
+                        </div>
+
+                        <StoreMini
+                          labelLeft="Today Gross"
+                          valueLeft={`₹${money(td?.value ?? 0)}`}
+                          labelRight="Month Gross"
+                          valueRight={`₹${money(mo?.value ?? 0)}`}
+                        />
+
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-xs text-gray-600 whitespace-nowrap">
+                            Today Δ: {signedMoney(td?.delta ?? 0)} ({pct(td?.deltaPct ?? null)})
+                          </span>
+
+                          <span className="text-xs text-gray-600 whitespace-nowrap">
+                            Month Δ: {signedMoney(mo?.delta ?? 0)} ({pct(mo?.deltaPct ?? null)})
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {sortedStoresByMonthGross.length === 0 && (
+                    <div className="p-4 text-sm text-gray-500">No store data yet.</div>
+                  )}
+                </div>
+
+                {/* Desktop */}
+                <div className="mt-3 border rounded-xl overflow-hidden bg-white hidden md:block">
                   <div className="grid grid-cols-12 bg-gray-50 text-xs font-medium p-3">
                     <div className="col-span-4">Store</div>
                     <div className="col-span-2 text-right">Today Gross</div>

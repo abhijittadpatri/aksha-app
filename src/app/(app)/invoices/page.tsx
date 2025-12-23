@@ -16,6 +16,10 @@ function safeDate(d: any) {
   }
 }
 
+function cls(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
+
 type Me = {
   role: "ADMIN" | "SHOP_OWNER" | "DOCTOR" | "BILLING";
 };
@@ -103,15 +107,21 @@ export default function InvoicesPage() {
     return null;
   }
 
+  const showStoreLine = activeStoreId === "all";
+
   return (
     <main className="p-4 md:p-6">
       <div className="page space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
+          <div className="min-w-0">
             <h1 className="h1">Invoices</h1>
-            <p className="subtle">
+            <p className="subtle truncate">
               Latest invoices{" "}
-              {activeStoreId === "all" ? "(All Stores)" : activeStoreId ? "" : "(Select a store)"}
+              {activeStoreId === "all"
+                ? "(All Stores)"
+                : activeStoreId
+                ? ""
+                : "(Select a store)"}
             </p>
           </div>
 
@@ -128,7 +138,72 @@ export default function InvoicesPage() {
         {err && <div className="text-sm text-red-600">{err}</div>}
 
         <div className="card card-pad">
-          <div className="border rounded-xl overflow-hidden bg-white">
+          {/* ---------------- MOBILE (Cards) ---------------- */}
+          <div className="md:hidden space-y-3">
+            {loading && invoices.length === 0 && !err && (
+              <div className="text-sm text-gray-500">Loading invoices…</div>
+            )}
+
+            {invoices.map((inv) => {
+              const total = inv.totalsJson?.total ?? inv.total ?? 0;
+              const status = inv.paymentStatus ?? "Unpaid";
+
+              return (
+                <div key={inv.id} className="border rounded-2xl bg-white p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">
+                        {inv.invoiceNo ?? "Invoice"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {safeDate(inv.createdAt)}
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <div className="font-semibold whitespace-nowrap">
+                        ₹{money(total)}
+                      </div>
+                      <span className="inline-block mt-1 text-[11px] px-2 py-1 rounded-full bg-gray-100 whitespace-nowrap">
+                        {status}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-2">
+                    <div className="text-sm min-w-0">
+                      <div className="truncate">
+                        <span className="text-gray-500">Patient: </span>
+                        <span className="font-medium">{inv.patient?.name ?? "-"}</span>
+                      </div>
+
+                      {showStoreLine && (
+                        <div className="text-xs text-gray-500 truncate mt-1">
+                          {inv.store?.name ? `Store: ${inv.store.name}` : ""}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-end">
+                      <Link
+                        className="underline text-sm"
+                        href={`/invoices/${inv.id}`}
+                      >
+                        View
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {!loading && invoices.length === 0 && !err && (
+              <div className="text-sm text-gray-500">No invoices yet.</div>
+            )}
+          </div>
+
+          {/* ---------------- DESKTOP (Table) ---------------- */}
+          <div className="hidden md:block border rounded-xl overflow-hidden bg-white">
             <div className="grid grid-cols-5 bg-gray-50 text-sm font-medium p-3">
               <div>Invoice</div>
               <div>Patient</div>
@@ -156,12 +231,12 @@ export default function InvoicesPage() {
                 </div>
 
                 <div>
-                  <span className="text-xs px-2 py-1 rounded-full bg-gray-100">
+                  <span className="text-xs px-2 py-1 rounded-full bg-gray-100 whitespace-nowrap">
                     {inv.paymentStatus ?? "Unpaid"}
                   </span>
                 </div>
 
-                <div className="text-right font-medium">
+                <div className="text-right font-medium whitespace-nowrap">
                   ₹{money(inv.totalsJson?.total ?? inv.total ?? 0)}
                 </div>
 

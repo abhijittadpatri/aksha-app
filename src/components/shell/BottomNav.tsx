@@ -20,12 +20,19 @@ function Tab({
   return (
     <Link
       href={href}
-      className={`flex flex-col items-center justify-center py-2 text-xs ${
-        active ? "font-semibold" : "text-gray-600"
-      }`}
+      className={[
+        "flex flex-col items-center justify-center px-1 py-2",
+        "text-[11px] leading-tight select-none",
+        active ? "font-semibold text-black" : "text-gray-600",
+      ].join(" ")}
     >
-      <span>{label}</span>
-      {active && <span className="mt-1 h-1 w-6 rounded-full bg-black" />}
+      <span className="max-w-full truncate">{label}</span>
+      <span
+        className={[
+          "mt-1 h-1 w-6 rounded-full transition-opacity",
+          active ? "bg-black opacity-100" : "opacity-0",
+        ].join(" ")}
+      />
     </Link>
   );
 }
@@ -49,7 +56,6 @@ export default function BottomNav() {
   const tabs = useMemo(() => {
     const role = me?.role;
 
-    // IMPORTANT: schema uses SHOP_OWNER (not OWNER)
     const items: { href: string; label: string; roles?: Me["role"][] }[] = [
       { href: "/dashboard", label: "Home" },
       { href: "/insights", label: "Insights", roles: ["ADMIN", "SHOP_OWNER"] },
@@ -61,34 +67,26 @@ export default function BottomNav() {
     return items.filter((it) => !it.roles || (role && it.roles.includes(role)));
   }, [me?.role]);
 
-  // Hide on login routes
+  // Hide on login-ish routes
   if (pathname.startsWith("/login") || pathname.startsWith("/change-password")) return null;
   // Hide when not logged in
   if (me === null) return null;
 
-  // Keep 4 columns (your current layout expects that)
-  // If fewer than 4 tabs, we pad with invisible placeholders to preserve spacing.
-  const paddedTabs = (() => {
-    const t = [...tabs];
-    while (t.length < 4) t.push({ href: "#", label: "", roles: [] as any });
-    return t.slice(0, 4);
-  })();
+  // Use 5 columns when we actually have 5 tabs; otherwise fall back to 4.
+  const colClass =
+    tabs.length >= 5 ? "grid-cols-5" : "grid-cols-4";
 
   return (
-    <nav className="md:hidden sticky bottom-0 z-40 border-t bg-white/90 backdrop-blur">
-      <div className="grid grid-cols-4">
-        {paddedTabs.map((t) =>
-          t.href === "#" ? (
-            <div key={`pad-${Math.random()}`} />
-          ) : (
-            <Tab
-              key={t.href}
-              href={t.href}
-              label={t.label}
-              active={pathname === t.href || pathname.startsWith(t.href + "/")}
-            />
-          )
-        )}
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t bg-white/90 backdrop-blur">
+      <div className={`grid ${colClass}`}>
+        {tabs.map((t) => (
+          <Tab
+            key={t.href}
+            href={t.href}
+            label={t.label}
+            active={pathname === t.href || pathname.startsWith(t.href + "/")}
+          />
+        ))}
       </div>
     </nav>
   );

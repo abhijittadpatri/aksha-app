@@ -1,119 +1,53 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { LayoutDashboard, Users, Receipt } from "lucide-react";
+import { useEffect, useState } from "react";
+import Sidebar from "./Sidebar";
+import TopBar from "./TopBar";
+import BottomNav from "./BottomNav";
 
 type MeUser = {
   id: string;
   email?: string | null;
   name?: string | null;
-  role: string;
-  tenant?: any;
-  stores?: any[];
+  role: "ADMIN" | "SHOP_OWNER" | "DOCTOR" | "BILLING";
+  tenant?: { name?: string | null } | null;
+  stores?: { id: string; name: string; city?: string | null }[];
 } | null;
 
-const NAV = [
-  {
-    href: "/dashboard",
-    label: "Dashboard",
-    icon: LayoutDashboard,
-    roles: ["ADMIN", "OWNER", "DOCTOR", "BILLING"],
-  },
-  {
-    href: "/patients",
-    label: "Patients",
-    icon: Users,
-    roles: ["ADMIN", "OWNER", "DOCTOR", "BILLING"],
-  },
-  {
-    href: "/invoices",
-    label: "Invoices",
-    icon: Receipt,
-    roles: ["ADMIN", "OWNER", "BILLING"],
-  },
-];
-
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const [me, setMe] = useState<MeUser>(null);
+  const [me, setMe] = useState<MeUser | undefined>(undefined); // undefined = loading
 
   useEffect(() => {
-    fetch("/api/me", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => setMe(d.user ?? null))
-      .catch(() => setMe(null));
+    (async () => {
+      try {
+        const res = await fetch("/api/me", { credentials: "include" });
+        const data = await res.json().catch(() => ({}));
+        setMe((data.user as MeUser) ?? null);
+      } catch {
+        setMe(null);
+      }
+    })();
   }, []);
 
-  // If me is not loaded yet, default to ADMIN so UI doesn't look empty during first paint.
-  const role = (me?.role ?? "ADMIN").toUpperCase();
-
-  const nav = useMemo(() => NAV.filter((x) => x.roles.includes(role)), [role]);
-
+  // While loading, still render layout shell (no nav flash)
+  // Sidebar/TopBar/BottomNav already handle me===null hiding appropriately in your code.
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex">
-          {/* Sidebar (desktop) */}
-          <aside className="hidden md:flex md:w-64 md:flex-col md:gap-2 md:border-r md:bg-white md:px-4 md:py-4">
-            <div className="px-2 text-lg font-semibold">Aksha</div>
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Desktop sidebar */}
+      <Sidebar />
 
-            <div className="px-2 text-xs text-gray-500 space-y-1">
-              <div>
-                Role: <span className="font-medium">{role}</span>
-              </div>
-              {me?.tenant?.name && (
-                <div>
-                  Tenant: <span className="font-medium">{me.tenant.name}</span>
-                </div>
-              )}
-            </div>
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile top bar */}
+        <TopBar />
 
-            <nav className="mt-2 flex flex-col gap-1">
-              {nav.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                  >
-                    <Icon size={18} />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </nav>
-          </aside>
+        {/* Main content */}
+        <main className="flex-1 p-4 md:p-6 pb-20 md:pb-6 min-w-0">
+          {children}
+        </main>
 
-          {/* Main */}
-          <main className="flex-1 px-4 py-4 md:px-6">
-            <div className="rounded-2xl bg-white p-4 shadow-sm md:p-6">
-              {children}
-            </div>
-          </main>
-        </div>
+        {/* Mobile bottom nav */}
+        <BottomNav />
       </div>
-
-      {/* Bottom nav (mobile) */}
-      <div className="fixed bottom-0 left-0 right-0 border-t bg-white md:hidden">
-        <div className="mx-auto flex max-w-7xl items-center justify-around py-2">
-          {nav.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="flex flex-col items-center gap-1 px-3 py-1 text-xs text-gray-700"
-              >
-                <Icon size={18} />
-                {item.label}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="h-14 md:hidden" />
     </div>
   );
 }
