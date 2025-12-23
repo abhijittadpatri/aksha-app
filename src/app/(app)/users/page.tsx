@@ -120,8 +120,8 @@ Please login and change your password immediately.
   }
 
   return (
-    <main className="p-4 md:p-6 space-y-4">
-      <div className="flex items-start md:items-center justify-between gap-3 flex-wrap">
+    <main className="p-4 md:p-6 space-y-4 pb-24 md:pb-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-semibold">Users</h1>
           <p className="text-sm text-gray-500">
@@ -183,8 +183,8 @@ Please login and change your password immediately.
 
           return (
             <div key={u.id} className="border rounded-2xl bg-white p-4 space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
                   <div className="font-semibold truncate">{u.name || "-"}</div>
                   <div className="text-sm text-gray-600 truncate">{u.email}</div>
                 </div>
@@ -196,7 +196,7 @@ Please login and change your password immediately.
 
               <div className="text-sm">
                 <div className="text-xs text-gray-500 mb-1">Stores</div>
-                <div className="text-gray-800 break-words">{storesText}</div>
+                <div className="text-gray-800 break-words whitespace-normal">{storesText}</div>
               </div>
 
               <div className="flex items-center justify-between gap-2">
