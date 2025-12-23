@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
         id: s.id,
         name: s.name,
         city: s.city ?? null,
-        isActive: s.isActive !== false,
+        isActive: s.isActive,
       }));
     } else {
       stores = (user.stores ?? [])
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
           id: s.id,
           name: s.name,
           city: s.city ?? null,
-          isActive: s.isActive !== false,
+          isActive: s.isActive,
         }));
     }
 
@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
         name: user.name ?? null,
         role: user.role,
         mustChangePassword: user.mustChangePassword,
-        isActive: user.isActive !== false,
+        isActive: user.isActive,
         tenant: user.tenant ? { name: user.tenant.name ?? null } : null,
         stores,
       },
