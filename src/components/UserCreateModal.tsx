@@ -8,6 +8,10 @@ export type CreatedPayload =
   | { email: string; tempPassword: string }
   | undefined;
 
+function cls(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
+
 export default function UserCreateModal({
   open,
   onClose,
@@ -48,6 +52,16 @@ export default function UserCreateModal({
     setSaving(false);
   }, [open]);
 
+  // Prevent background scroll while modal open (nice on mobile)
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   function toggleStore(id: string) {
     setStoreIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
@@ -61,8 +75,7 @@ export default function UserCreateModal({
     if (!e) return setErr("Email is required");
     if (!tempPassword || tempPassword.trim().length < 6)
       return setErr("Temp password must be at least 6 characters");
-    if (storeIds.length === 0)
-      return setErr("Select at least one store");
+    if (storeIds.length === 0) return setErr("Select at least one store");
 
     setSaving(true);
     try {
@@ -86,12 +99,7 @@ export default function UserCreateModal({
         return;
       }
 
-      // Pass invite details back to Users page
-      onCreated({
-        email: e,
-        tempPassword: tempPassword.trim(),
-      });
-
+      onCreated({ email: e, tempPassword: tempPassword.trim() });
       onClose();
     } catch (e: any) {
       setErr(String(e?.message ?? "Create failed"));
@@ -102,113 +110,148 @@ export default function UserCreateModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-      <div className="bg-white w-full max-w-xl rounded-2xl p-4 space-y-4 shadow">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Create User</h2>
-          <button className="text-sm underline" onClick={onClose}>
-            Close
-          </button>
-        </div>
+    <div
+      className="fixed inset-0 z-50 bg-black/30 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      role="dialog"
+      aria-modal="true"
+    >
+      {/* Click outside to close (optional but nice) */}
+      <div className="absolute inset-0" onClick={onClose} />
 
-        <div className="text-xs text-gray-600">
-          <strong>Note:</strong> Owners (<code>SHOP_OWNER</code>) are created
-          manually for security reasons. You can create Admin, Doctor, or
-          Billing users here.
-        </div>
+      {/* Panel */}
+      <div className="relative w-full sm:max-w-xl bg-white rounded-t-2xl sm:rounded-2xl shadow">
+        {/* Scroll container (critical for mobile) */}
+        <div className="max-h-[85vh] overflow-y-auto p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Create User</h2>
+            <button className="text-sm underline" onClick={onClose}>
+              Close
+            </button>
+          </div>
 
-        {err && <div className="text-sm text-red-600">{err}</div>}
+          <div className="text-xs text-gray-600">
+            <strong>Note:</strong> Owners (<code>SHOP_OWNER</code>) are created
+            manually for security reasons. You can create Admin, Doctor, or
+            Billing users here.
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <div className="text-xs text-gray-500 mb-1">Email *</div>
-            <input
-              className="w-full border rounded-lg p-2"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="user@clinic.com"
-              autoComplete="off"
-            />
+          {err && <div className="text-sm text-red-600">{err}</div>}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <div className="text-xs text-gray-500 mb-1">Email *</div>
+              <input
+                className="w-full border rounded-lg p-2"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="user@clinic.com"
+                autoComplete="off"
+                inputMode="email"
+              />
+            </div>
+
+            <div>
+              <div className="text-xs text-gray-500 mb-1">Name</div>
+              <input
+                className="w-full border rounded-lg p-2"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Full name"
+                autoComplete="off"
+              />
+            </div>
+
+            <div>
+              <div className="text-xs text-gray-500 mb-1">Role *</div>
+              <select
+                className="w-full border rounded-lg p-2"
+                value={role}
+                onChange={(e) => setRole(e.target.value as any)}
+              >
+                <option value="ADMIN">Admin</option>
+                <option value="DOCTOR">Doctor</option>
+                <option value="BILLING">Billing</option>
+              </select>
+            </div>
+
+            <div>
+              <div className="text-xs text-gray-500 mb-1">Temp Password *</div>
+              <input
+                className="w-full border rounded-lg p-2"
+                value={tempPassword}
+                onChange={(e) => setTempPassword(e.target.value)}
+                placeholder="Min 6 characters"
+                type="password"
+                autoComplete="new-password"
+              />
+              <div className="text-[11px] text-gray-500 mt-1">
+                User will be forced to change on next login.
+              </div>
+            </div>
           </div>
 
           <div>
-            <div className="text-xs text-gray-500 mb-1">Name</div>
-            <input
-              className="w-full border rounded-lg p-2"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Full name"
-              autoComplete="off"
-            />
-          </div>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="text-xs text-gray-500">Stores *</div>
+              <div className="text-[11px] text-gray-400">
+                Selected: {storeIds.length}
+              </div>
+            </div>
 
-          <div>
-            <div className="text-xs text-gray-500 mb-1">Role *</div>
-            <select
-              className="w-full border rounded-lg p-2"
-              value={role}
-              onChange={(e) => setRole(e.target.value as any)}
-            >
-              <option value="ADMIN">Admin</option>
-              <option value="DOCTOR">Doctor</option>
-              <option value="BILLING">Billing</option>
-            </select>
-          </div>
+            {/* Stores scroll area */}
+            <div className="border rounded-xl p-2 max-h-[40vh] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {stores.map((s) => {
+                  const checked = storeIds.includes(s.id);
+                  return (
+                    <button
+                      type="button"
+                      key={s.id}
+                      onClick={() => toggleStore(s.id)}
+                      className={cls(
+                        "border rounded-lg p-2 text-left text-sm transition",
+                        checked ? "bg-black text-white" : "bg-white hover:bg-gray-50"
+                      )}
+                    >
+                      <div className="font-medium">{s.name}</div>
+                      <div
+                        className={cls(
+                          "text-xs",
+                          checked ? "text-white/80" : "text-gray-500"
+                        )}
+                      >
+                        {s.city ?? ""}
+                      </div>
+                    </button>
+                  );
+                })}
 
-          <div>
-            <div className="text-xs text-gray-500 mb-1">Temp Password *</div>
-            <input
-              className="w-full border rounded-lg p-2"
-              value={tempPassword}
-              onChange={(e) => setTempPassword(e.target.value)}
-              placeholder="Min 6 characters"
-              type="text"
-              autoComplete="off"
-            />
-          </div>
-        </div>
-
-        <div>
-          <div className="text-xs text-gray-500 mb-2">Stores *</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-            {stores.map((s) => {
-              const checked = storeIds.includes(s.id);
-              return (
-                <button
-                  type="button"
-                  key={s.id}
-                  onClick={() => toggleStore(s.id)}
-                  className={`border rounded-lg p-2 text-left text-sm ${
-                    checked ? "bg-black text-white" : "bg-white"
-                  }`}
-                >
-                  <div className="font-medium">{s.name}</div>
-                  <div
-                    className={`text-xs ${
-                      checked ? "text-white/80" : "text-gray-500"
-                    }`}
-                  >
-                    {s.city ?? ""}
+                {stores.length === 0 && (
+                  <div className="text-sm text-gray-500 p-2">
+                    No stores found. (Seed should create stores.)
                   </div>
-                </button>
-              );
-            })}
+                )}
+              </div>
+            </div>
 
-            {stores.length === 0 && (
-              <div className="text-sm text-gray-500">
-                No stores found. (Seed should create stores.)
+            {storeIds.length === 0 && (
+              <div className="text-[11px] text-gray-500 mt-2">
+                Tip: choose at least one store.
               </div>
             )}
           </div>
-        </div>
 
-        <button
-          className="w-full bg-black text-white rounded-lg p-2 disabled:opacity-50"
-          onClick={create}
-          disabled={saving}
-        >
-          {saving ? "Creating..." : "Create User"}
-        </button>
+          <button
+            className="w-full bg-black text-white rounded-lg p-2 disabled:opacity-50"
+            onClick={create}
+            disabled={saving}
+          >
+            {saving ? "Creating..." : "Create User"}
+          </button>
+
+          {/* Safe-area padding for iOS bottom bar */}
+          <div className="h-2" />
+        </div>
       </div>
     </div>
   );

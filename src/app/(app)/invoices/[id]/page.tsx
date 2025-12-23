@@ -10,6 +10,10 @@ function money(n: any) {
   return x.toFixed(2);
 }
 
+function cls(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
+
 export default function InvoicePage() {
   const params = useParams<{ id: string }>();
   const invoiceId = (params?.id as string) || "";
@@ -59,6 +63,7 @@ export default function InvoicePage() {
   }, [toast]);
 
   const items = invoice?.totalsJson?.items ?? [];
+
   const patientMobileRaw = invoice?.patient?.mobile ?? "";
   const patientMobile = String(patientMobileRaw).replace(/\D/g, "");
   const hasMobile = patientMobile.length >= 10;
@@ -71,7 +76,8 @@ export default function InvoicePage() {
     const patientName = invoice.patient?.name ?? "Customer";
     const invoiceNo = invoice.invoiceNo ?? "Invoice";
     const amount = Number(invoice.totalsJson?.total ?? 0);
-    const paymentStatus = (invoice.paymentStatus ?? "UNPAID") === "PAID" ? "PAID" : "UNPAID";
+    const psRaw = String(invoice.paymentStatus ?? "Unpaid").toLowerCase();
+    const paymentStatus = psRaw === "paid" ? "PAID" : "UNPAID";
 
     return buildInvoiceWhatsAppMessage({
       clinicOrStoreName,
@@ -95,7 +101,7 @@ export default function InvoicePage() {
       await navigator.clipboard.writeText(waMessage);
       setToast("Message copied ✅");
     } catch {
-      // Fallback for older browsers
+      // fallback
       const ta = document.createElement("textarea");
       ta.value = waMessage;
       document.body.appendChild(ta);
@@ -106,42 +112,73 @@ export default function InvoicePage() {
     }
   }
 
+  const createdAtLabel = useMemo(() => {
+    try {
+      return invoice?.createdAt ? new Date(invoice.createdAt).toLocaleString() : "";
+    } catch {
+      return "";
+    }
+  }, [invoice?.createdAt]);
+
   return (
     <>
       <main className="p-4 md:p-6">
         <div className="page space-y-4">
-          {/* Top Row */}
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <Link className="text-sm underline" href="/patients">
-              ← Back
-            </Link>
+          {/* Header */}
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <Link className="text-sm underline" href="/invoices">
+                ← Back to Invoices
+              </Link>
+              <div className="mt-2">
+                <h1 className="h1 truncate">
+                  {invoice?.invoiceNo ? `Invoice ${invoice.invoiceNo}` : "Invoice"}
+                </h1>
+                <p className="subtle truncate">
+                  {invoice?.store?.name ? invoice.store.name : "Store"}{" "}
+                  {createdAtLabel ? `• ${createdAtLabel}` : ""}
+                </p>
+              </div>
+            </div>
 
-            <div className="flex gap-2 flex-wrap justify-end">
-              <button className="btn btn-ghost border" onClick={() => window.print()}>
-                Print
-              </button>
+            {/* Actions: mobile grid, desktop inline */}
+            <div className="w-full md:w-auto">
+              <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:justify-end">
+                <button className="btn btn-ghost border" onClick={() => window.print()}>
+                  Print
+                </button>
 
-              <button
-                className="btn btn-ghost border"
-                onClick={copyMessage}
-                disabled={!waMessage}
-                title={!waMessage ? "Invoice not loaded yet" : "Copy WhatsApp message"}
-              >
-                Copy Message
-              </button>
+                <button
+                  className="btn btn-ghost border"
+                  onClick={copyMessage}
+                  disabled={!waMessage}
+                  title={!waMessage ? "Invoice not loaded yet" : "Copy WhatsApp message"}
+                >
+                  Copy Message
+                </button>
 
-              {hasMobile ? (
                 <a
-                  className="btn btn-primary"
-                  href={waLink}
+                  className={cls(
+                    "btn",
+                    hasMobile ? "btn-primary" : "btn-ghost border opacity-60 pointer-events-none"
+                  )}
+                  href={hasMobile ? waLink : "#"}
                   target="_blank"
                   rel="noreferrer"
-                  title="Open WhatsApp with message"
+                  title={hasMobile ? "Open WhatsApp with message" : "No patient mobile for WhatsApp"}
                 >
-                  Open WhatsApp
+                  WhatsApp
                 </a>
-              ) : (
-                <span className="text-sm text-gray-500">No patient mobile for WhatsApp</span>
+
+                <button className="btn btn-ghost border" onClick={load} disabled={loading}>
+                  {loading ? "Refreshing…" : "Refresh"}
+                </button>
+              </div>
+
+              {!hasMobile && invoice && (
+                <div className="mt-2 text-xs text-gray-500">
+                  WhatsApp disabled: patient mobile not available.
+                </div>
               )}
             </div>
           </div>
@@ -160,31 +197,72 @@ export default function InvoicePage() {
             </div>
           )}
 
-          {/* Invoice Card */}
+          {/* Content */}
           {invoice && !loading && (
             <div className="card card-pad print-card bg-white space-y-4">
+              {/* Store + meta */}
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="h1">{invoice.store?.name ?? "Store"}</div>
-                  <div className="subtle">{invoice.store?.city ?? ""}</div>
+                <div className="min-w-0">
+                  <div className="text-lg font-semibold truncate">
+                    {invoice.store?.name ?? "Store"}
+                  </div>
+                  <div className="subtle truncate">{invoice.store?.city ?? ""}</div>
                 </div>
 
-                <div className="text-right">
+                <div className="text-right shrink-0">
                   <div className="badge">{invoice.invoiceNo}</div>
-                  <div className="subtle mt-1">{new Date(invoice.createdAt).toLocaleString()}</div>
+                  <div className="subtle mt-1 text-xs">{createdAtLabel}</div>
                 </div>
               </div>
 
+              {/* Billed To */}
               <div className="border-t pt-3">
                 <div className="h2">Billed To</div>
-                <div className="text-sm">{invoice.patient?.name ?? "-"}</div>
-                <div className="subtle">{invoice.patient?.mobile ?? ""}</div>
+                <div className="mt-1 text-sm font-medium truncate">
+                  {invoice.patient?.name ?? "-"}
+                </div>
+                <div className="text-xs text-gray-600 truncate">
+                  {invoice.patient?.mobile ?? ""}
+                </div>
               </div>
 
+              {/* Items: mobile cards */}
               <div className="border-t pt-3 space-y-2">
                 <div className="h2">Items</div>
 
-                <div className="table">
+                {/* Mobile list */}
+                <div className="space-y-2 md:hidden">
+                  {items.map((it: any, idx: number) => {
+                    const qty = Number(it.qty || 0);
+                    const rate = Number(it.rate || 0);
+                    const amt = qty * rate;
+
+                    return (
+                      <div key={idx} className="border rounded-xl p-3">
+                        <div className="font-medium truncate">{it.name ?? "Item"}</div>
+                        <div className="mt-1 flex items-center justify-between text-xs text-gray-600">
+                          <span>
+                            Qty: <span className="font-medium">{qty}</span>
+                          </span>
+                          <span>
+                            Rate: <span className="font-medium">₹{money(rate)}</span>
+                          </span>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-xs text-gray-600">Amount</span>
+                          <span className="font-semibold">₹{money(amt)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {items.length === 0 && (
+                    <div className="p-3 text-sm text-gray-500 border rounded-xl">No items.</div>
+                  )}
+                </div>
+
+                {/* Desktop table */}
+                <div className="hidden md:block border rounded-xl overflow-hidden bg-white">
                   <div className="grid grid-cols-4 bg-gray-50 text-sm p-2 font-medium">
                     <div className="col-span-2">Item</div>
                     <div className="text-right">Qty</div>
@@ -211,23 +289,26 @@ export default function InvoicePage() {
                 </div>
               </div>
 
-              <div className="border-t pt-3 flex justify-end">
-                <div className="w-full max-w-sm space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span>Subtotal</span>
-                    <span>₹{money(invoice.totalsJson?.subTotal)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Discount</span>
-                    <span>₹{money(invoice.totalsJson?.discount)}</span>
-                  </div>
-                  <div className="flex justify-between font-semibold text-base">
-                    <span>Total</span>
-                    <span>₹{money(invoice.totalsJson?.total)}</span>
-                  </div>
-                  <div className="subtle text-xs">
-                    Payment: {invoice.totalsJson?.paymentMode ?? "-"} •{" "}
-                    {invoice.paymentStatus ?? "UNPAID"}
+              {/* Totals */}
+              <div className="border-t pt-3">
+                <div className="flex flex-col sm:flex-row sm:justify-end">
+                  <div className="w-full sm:max-w-sm space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span>Subtotal</span>
+                      <span>₹{money(invoice.totalsJson?.subTotal)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Discount</span>
+                      <span>₹{money(invoice.totalsJson?.discount)}</span>
+                    </div>
+                    <div className="flex justify-between font-semibold text-base">
+                      <span>Total</span>
+                      <span>₹{money(invoice.totalsJson?.total)}</span>
+                    </div>
+                    <div className="subtle text-xs">
+                      Payment: {invoice.totalsJson?.paymentMode ?? "-"} •{" "}
+                      {invoice.paymentStatus ?? "Unpaid"}
+                    </div>
                   </div>
                 </div>
               </div>

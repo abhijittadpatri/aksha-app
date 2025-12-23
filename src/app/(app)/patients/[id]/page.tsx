@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 
 type Patient = {
   id: string;
@@ -17,13 +17,39 @@ const TABS = ["Overview", "Prescriptions", "Orders", "Invoices"] as const;
 type Tab = (typeof TABS)[number];
 
 function fmt(v: any) {
-  if (v === null || v === undefined || v === "") return "-";
+  if (v === null || v === undefined || v === "") return "—";
   return String(v);
 }
 
 function money(n: any) {
   const x = Number(n || 0);
   return x.toFixed(2);
+}
+
+function cls(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
+
+function TabPill({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cls(
+        "shrink-0 rounded-full px-3 py-2 text-sm border transition",
+        active ? "bg-black text-white border-black" : "bg-white hover:bg-gray-50"
+      )}
+    >
+      {children}
+    </button>
+  );
 }
 
 export default function PatientDetailPage() {
@@ -84,9 +110,7 @@ export default function PatientDetailPage() {
     setErr(null);
     if (!patientId) return;
 
-    const res = await fetch(`/api/patients/${patientId}`, {
-      credentials: "include",
-    });
+    const res = await fetch(`/api/patients/${patientId}`, { credentials: "include" });
     const data = await safeJson(res);
 
     if (!res.ok) {
@@ -144,8 +168,6 @@ export default function PatientDetailPage() {
       return;
     }
 
-    if (data.prescription) setPrescriptions((prev) => [data.prescription, ...prev]);
-
     setRxOpen(false);
 
     setRSphere("");
@@ -166,9 +188,7 @@ export default function PatientDetailPage() {
     setOrderErr(null);
     if (!patientId) return;
 
-    const res = await fetch(`/api/orders?patientId=${patientId}`, {
-      credentials: "include",
-    });
+    const res = await fetch(`/api/orders?patientId=${patientId}`, { credentials: "include" });
     const data = await safeJson(res);
 
     if (!res.ok) {
@@ -219,9 +239,7 @@ export default function PatientDetailPage() {
       return;
     }
 
-    if (data.order) setOrders((prev) => [data.order, ...prev]);
     setOrderOpen(false);
-
     await loadOrders();
   }
 
@@ -229,9 +247,7 @@ export default function PatientDetailPage() {
     setInvErr(null);
     if (!patientId) return;
 
-    const res = await fetch(`/api/invoices?patientId=${patientId}`, {
-      credentials: "include",
-    });
+    const res = await fetch(`/api/invoices?patientId=${patientId}`, { credentials: "include" });
     const data = await safeJson(res);
 
     if (!res.ok) {
@@ -242,69 +258,13 @@ export default function PatientDetailPage() {
     setInvoices(data.invoices ?? []);
   }
 
-  async function generateInvoiceFromLatestOrder() {
-    try {
-      setInvErr(null);
-
-      const storeId = getActiveStoreId();
-      if (!storeId) {
-        setInvErr("Select a store in the header to generate invoice.");
-        return;
-      }
-
-      const latestOrderId = orders?.[0]?.id;
-      if (!latestOrderId) {
-        setInvErr("No orders found. Create an order first.");
-        return;
-      }
-
-      const res = await fetch("/api/invoices", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patientId,
-          storeId,
-          orderId: latestOrderId,
-          discount: 0,
-          paid: false,
-          paymentMode: "Cash",
-        }),
-      });
-
-      const data = await safeJson(res);
-
-      if (!res.ok) {
-        const msg = data?.error ? String(data.error) : `HTTP ${res.status}`;
-        setInvErr("Invoice error: " + msg);
-        return;
-      }
-
-      if (data.invoice?.id) {
-        window.location.href = `/invoices/${data.invoice.id}`;
-        return;
-      }
-
-      await loadInvoices();
-    } catch (e: any) {
-      setInvErr("Invoice exception: " + (e?.message ?? String(e)));
-    }
-  }
-
   async function generateInvoiceForOrder(orderId: string) {
     try {
       setInvErr(null);
 
       const storeId = getActiveStoreId();
-      if (!storeId) {
-        setInvErr("Select a store in the header to generate invoice.");
-        return;
-      }
-
-      if (!orderId) {
-        setInvErr("OrderId missing.");
-        return;
-      }
+      if (!storeId) return setInvErr("Select a store in the header to generate invoice.");
+      if (!orderId) return setInvErr("OrderId missing.");
 
       const res = await fetch("/api/invoices", {
         method: "POST",
@@ -329,7 +289,6 @@ export default function PatientDetailPage() {
       }
 
       if (data.invoice?.id) {
-        setInvoices((prev) => [data.invoice, ...prev]);
         window.location.href = `/invoices/${data.invoice.id}`;
         return;
       }
@@ -338,6 +297,15 @@ export default function PatientDetailPage() {
     } catch (e: any) {
       setInvErr("Invoice exception: " + (e?.message ?? String(e)));
     }
+  }
+
+  async function generateInvoiceFromLatestOrder() {
+    const latestOrderId = orders?.[0]?.id;
+    if (!latestOrderId) {
+      setInvErr("No orders found. Create an order first.");
+      return;
+    }
+    return generateInvoiceForOrder(latestOrderId);
   }
 
   useEffect(() => {
@@ -349,32 +317,38 @@ export default function PatientDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId]);
 
-  const billedOrderIds = new Set((invoices ?? []).map((iv) => iv.orderId));
+  const billedOrderIds = useMemo(
+    () => new Set((invoices ?? []).map((iv) => iv.orderId)),
+    [invoices]
+  );
+
+  const headerMeta = useMemo(() => {
+    if (!patient) return "";
+    const parts = [];
+    if (patient.mobile) parts.push(`📞 ${patient.mobile}`);
+    if (patient.gender) parts.push(patient.gender);
+    if (patient.age) parts.push(`${patient.age} yrs`);
+    return parts.join(" • ");
+  }, [patient]);
 
   return (
     <main className="p-4 md:p-6">
       <div className="page space-y-4">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
+          <div className="min-w-0">
             <Link href="/patients" className="text-sm underline">
               ← Back to Patients
             </Link>
 
-            <h1 className="h1 mt-1">{patient?.name ?? "Patient"}</h1>
-
-            {patient && (
-              <div className="subtle">
-                {patient.mobile ? `📞 ${patient.mobile}` : ""}
-                {patient.gender ? ` • ${patient.gender}` : ""}
-                {patient.age ? ` • ${patient.age} yrs` : ""}
-              </div>
-            )}
+            <h1 className="h1 mt-1 truncate">{patient?.name ?? "Patient"}</h1>
+            {patient && <div className="subtle truncate">{headerMeta}</div>}
           </div>
 
-          <div className="flex gap-2">
+          {/* Mobile-friendly action */}
+          <div className="w-full md:w-auto">
             <button
-              className="btn btn-primary"
+              className="btn btn-primary w-full md:w-auto"
               onClick={() => {
                 setTab("Prescriptions");
                 setRxOpen(true);
@@ -387,17 +361,13 @@ export default function PatientDetailPage() {
 
         {err && <div className="text-sm text-red-600">{err}</div>}
 
-        {/* Tabs */}
+        {/* Tabs: scroll bar on mobile */}
         <div className="card card-pad">
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
             {TABS.map((t) => (
-              <button
-                key={t}
-                className={`btn ${tab === t ? "btn-primary" : "btn-ghost"}`}
-                onClick={() => setTab(t)}
-              >
+              <TabPill key={t} active={tab === t} onClick={() => setTab(t)}>
                 {t}
-              </button>
+              </TabPill>
             ))}
           </div>
         </div>
@@ -406,11 +376,11 @@ export default function PatientDetailPage() {
         <div className="card card-pad">
           {tab === "Overview" && (
             <div className="space-y-2">
-              <div>
-                <span className="font-medium">Patient ID:</span> {patient?.id ?? "-"}
+              <div className="text-sm">
+                <span className="font-medium">Patient ID:</span> {patient?.id ?? "—"}
               </div>
-              <div>
-                <span className="font-medium">Address:</span> {patient?.address ?? "-"}
+              <div className="text-sm">
+                <span className="font-medium">Address:</span> {patient?.address ?? "—"}
               </div>
               <div className="subtle">
                 Suggested flow: Prescription → Order → Invoice → Print/WhatsApp.
@@ -420,35 +390,33 @@ export default function PatientDetailPage() {
 
           {tab === "Prescriptions" && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                 <div className="h2">Prescriptions</div>
 
-                <div className="flex gap-2">
-                  <button className="btn btn-ghost" onClick={() => setShowRxDebug((v) => !v)}>
+                <div className="grid grid-cols-2 gap-2 md:flex md:justify-end">
+                  <button className="btn btn-ghost border" onClick={() => setShowRxDebug((v) => !v)}>
                     {showRxDebug ? "Hide JSON" : "Show JSON"}
                   </button>
 
                   <button className="btn btn-primary" onClick={() => setRxOpen(true)}>
-                    + Add Prescription
+                    + Add Rx
                   </button>
                 </div>
               </div>
 
               {rxErr && <div className="text-sm text-red-600">{rxErr}</div>}
 
-              <div className="table">
-                <div className="p-3 border-b bg-gray-50 text-sm font-medium">Recent Prescriptions</div>
-
+              <div className="space-y-3">
                 {prescriptions.map((rx) => (
-                  <div key={rx.id} className="p-3 border-t">
+                  <div key={rx.id} className="border rounded-2xl p-3">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-sm font-medium">Prescription</div>
-                        <div className="text-xs text-gray-600">
+                        <div className="text-xs text-gray-600 truncate">
                           {new Date(rx.createdAt).toLocaleString()}
                         </div>
                       </div>
-                      <span className="badge">Rx</span>
+                      <span className="badge shrink-0">Rx</span>
                     </div>
 
                     <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -471,7 +439,7 @@ export default function PatientDetailPage() {
 
                     <div className="mt-2 text-sm">
                       <span className="font-medium">PD:</span> {fmt(rx.rxJson?.pd)}{" "}
-                      <span className="font-medium">Notes:</span> {fmt(rx.rxJson?.notes)}
+                      <span className="font-medium">• Notes:</span> {fmt(rx.rxJson?.notes)}
                     </div>
 
                     {showRxDebug && (
@@ -483,7 +451,9 @@ export default function PatientDetailPage() {
                 ))}
 
                 {prescriptions.length === 0 && (
-                  <div className="p-4 text-sm text-gray-500">No prescriptions yet.</div>
+                  <div className="p-4 text-sm text-gray-500 border rounded-2xl">
+                    No prescriptions yet.
+                  </div>
                 )}
               </div>
             </div>
@@ -491,18 +461,16 @@ export default function PatientDetailPage() {
 
           {tab === "Orders" && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                 <div className="h2">Spectacle Orders</div>
-                <button className="btn btn-primary" onClick={() => setOrderOpen(true)}>
+                <button className="btn btn-primary w-full md:w-auto" onClick={() => setOrderOpen(true)}>
                   + Create Order
                 </button>
               </div>
 
               {orderErr && <div className="text-sm text-red-600">{orderErr}</div>}
 
-              <div className="table">
-                <div className="p-3 border-b bg-gray-50 text-sm font-medium">Recent Orders</div>
-
+              <div className="space-y-3">
                 {orders.map((o) => {
                   const items = o.itemsJson?.items ?? [];
                   const sub = items.reduce((s: number, it: any) => {
@@ -514,20 +482,19 @@ export default function PatientDetailPage() {
                   const billed = billedOrderIds.has(o.id);
 
                   return (
-                    <div key={o.id} className="p-3 border-t space-y-2">
-                      <div className="flex justify-between items-start gap-3">
-                        <div>
+                    <div key={o.id} className="border rounded-2xl p-3 space-y-2">
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                        <div className="min-w-0">
                           <div className="text-sm font-medium">Order</div>
-                          <div className="text-xs text-gray-600">
+                          <div className="text-xs text-gray-600 truncate">
                             {new Date(o.createdAt).toLocaleString()} • Amount ₹{money(sub)}
                           </div>
                           <div className="text-xs text-gray-600">
-                            Order ID: {String(o.id).slice(-6)} •{" "}
-                            {billed ? "Billed" : "Unbilled"}
+                            Order ID: {String(o.id).slice(-6)} • {billed ? "Billed" : "Unbilled"}
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 justify-end">
                           <span className="badge">{o.status}</span>
                           {billed ? (
                             <span className="text-xs text-green-700 font-medium">Billed</span>
@@ -542,7 +509,25 @@ export default function PatientDetailPage() {
                         </div>
                       </div>
 
-                      <div className="border rounded-xl overflow-hidden">
+                      {/* Items: mobile cards */}
+                      <div className="space-y-2 md:hidden">
+                        {items.map((it: any, idx: number) => (
+                          <div key={idx} className="border rounded-xl p-3">
+                            <div className="font-medium truncate">{it.name ?? "Item"}</div>
+                            <div className="mt-1 flex items-center justify-between text-xs text-gray-600">
+                              <span>
+                                Qty: <span className="font-medium">{Number(it.qty || 0)}</span>
+                              </span>
+                              <span>
+                                Rate: <span className="font-medium">₹{money(it.rate)}</span>
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Items: desktop table */}
+                      <div className="hidden md:block border rounded-xl overflow-hidden">
                         <div className="grid grid-cols-4 bg-gray-50 text-sm p-2 font-medium">
                           <div className="col-span-2">Item</div>
                           <div className="text-right">Qty</div>
@@ -566,7 +551,7 @@ export default function PatientDetailPage() {
                 })}
 
                 {orders.length === 0 && (
-                  <div className="p-4 text-sm text-gray-500">No orders yet.</div>
+                  <div className="p-4 text-sm text-gray-500 border rounded-2xl">No orders yet.</div>
                 )}
               </div>
             </div>
@@ -574,35 +559,41 @@ export default function PatientDetailPage() {
 
           {tab === "Invoices" && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                 <div className="h2">Invoices</div>
-                <button className="btn btn-primary" onClick={generateInvoiceFromLatestOrder}>
+                <button
+                  className="btn btn-primary w-full md:w-auto"
+                  onClick={generateInvoiceFromLatestOrder}
+                >
                   Generate Invoice (Latest Order)
                 </button>
               </div>
 
               {invErr && <div className="text-sm text-red-600">{invErr}</div>}
 
-              <div className="table">
-                <div className="p-3 border-b bg-gray-50 text-sm font-medium">Recent Invoices</div>
-
+              <div className="space-y-2">
                 {invoices.map((inv) => (
-                  <div key={inv.id} className="p-3 border-t flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium">{inv.invoiceNo}</div>
-                      <div className="text-xs text-gray-600">
+                  <div
+                    key={inv.id}
+                    className="border rounded-2xl p-3 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{inv.invoiceNo}</div>
+                      <div className="text-xs text-gray-600 truncate">
                         {new Date(inv.createdAt).toLocaleString()} • Total ₹{money(inv.total)}
                       </div>
                     </div>
 
-                    <a className="btn btn-ghost border" href={`/invoices/${inv.id}`}>
+                    <a className="btn btn-ghost border shrink-0" href={`/invoices/${inv.id}`}>
                       Open
                     </a>
                   </div>
                 ))}
 
                 {invoices.length === 0 && (
-                  <div className="p-4 text-sm text-gray-500">No invoices yet.</div>
+                  <div className="p-4 text-sm text-gray-500 border rounded-2xl">
+                    No invoices yet.
+                  </div>
                 )}
               </div>
             </div>
@@ -612,8 +603,8 @@ export default function PatientDetailPage() {
         {/* Rx Modal */}
         {rxOpen && (
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-            <div className="bg-white w-full max-w-2xl rounded-2xl p-4 space-y-3 shadow">
-              <div className="flex justify-between items-center">
+            <div className="bg-white w-full max-w-2xl rounded-2xl p-4 shadow max-h-[85vh] overflow-auto space-y-3">
+              <div className="flex justify-between items-center sticky top-0 bg-white pb-2">
                 <h2 className="text-lg font-semibold">New Prescription</h2>
                 <button className="text-sm underline" onClick={() => setRxOpen(false)}>
                   Close
@@ -655,8 +646,8 @@ export default function PatientDetailPage() {
         {/* Order Modal */}
         {orderOpen && (
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-            <div className="bg-white w-full max-w-xl rounded-2xl p-4 space-y-3 shadow">
-              <div className="flex justify-between items-center">
+            <div className="bg-white w-full max-w-xl rounded-2xl p-4 shadow max-h-[85vh] overflow-auto space-y-3">
+              <div className="flex justify-between items-center sticky top-0 bg-white pb-2">
                 <h2 className="text-lg font-semibold">Create Order</h2>
                 <button className="text-sm underline" onClick={() => setOrderOpen(false)}>
                   Close
@@ -672,7 +663,7 @@ export default function PatientDetailPage() {
                 onChange={(e) => setOrderItemName(e.target.value)}
               />
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input className="input" placeholder="Qty" value={orderQty} onChange={(e) => setOrderQty(e.target.value)} />
                 <input className="input" placeholder="Rate" value={orderRate} onChange={(e) => setOrderRate(e.target.value)} />
               </div>
@@ -688,6 +679,16 @@ export default function PatientDetailPage() {
           </div>
         )}
       </div>
+
+      <style jsx global>{`
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
     </main>
   );
 }
