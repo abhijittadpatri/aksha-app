@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "Store" ADD COLUMN     "disabledAt" TIMESTAMP(3),
+ADD COLUMN     "isActive" BOOLEAN NOT NULL DEFAULT true;
+
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "disabledAt" TIMESTAMP(3),
+ADD COLUMN     "isActive" BOOLEAN NOT NULL DEFAULT true;

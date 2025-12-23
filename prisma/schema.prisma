@@ -29,15 +29,18 @@ model Tenant {
 }
 
 model Store {
-  id       String      @id @default(cuid())
+  id       String   @id @default(cuid())
   tenantId String
-  tenant   Tenant      @relation(fields: [tenantId], references: [id])
+  tenant   Tenant   @relation(fields: [tenantId], references: [id])
   name     String
   city     String?
   address  String?
+
+  isActive  Boolean  @default(true)
+  disabledAt DateTime?
+
   users    UserStore[]
   patients Patient[]
-
   prescriptions Prescription[]
   orders        SpectacleOrder[]
   invoices      Invoice[]
@@ -46,16 +49,20 @@ model Store {
 }
 
 model User {
-  id                 String      @id @default(cuid())
+  id                 String   @id @default(cuid())
   tenantId           String
-  tenant             Tenant      @relation(fields: [tenantId], references: [id])
-  email              String      @unique
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  email              String   @unique
   name               String?
-  role               Role        @default(BILLING)
+  role               Role     @default(BILLING)
   stores             UserStore[]
-  passwordHash       String      @default("")
-  mustChangePassword Boolean     @default(true)
-  createdAt          DateTime    @default(now())
+  passwordHash       String   @default("")
+  mustChangePassword Boolean  @default(true)
+
+  isActive  Boolean  @default(true)
+  disabledAt DateTime?
+
+  createdAt DateTime @default(now())
 }
 
 model UserStore {

@@ -17,7 +17,9 @@ function roleLabel(role: any) {
 }
 
 function statusLabel(u: any) {
-  return u?.mustChangePassword ? "Must change password" : "Active";
+  if (u?.isActive === false) return "Disabled";
+  if (u?.mustChangePassword) return "Must change password";
+  return "Active";
 }
 
 export default function UsersPage() {
@@ -26,15 +28,18 @@ export default function UsersPage() {
   const [open, setOpen] = useState(false);
   const [me, setMe] = useState<any>(undefined);
 
-  // Invite message state
   const [inviteText, setInviteText] = useState<string>("");
 
-  // Load current user
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/me", { credentials: "include" });
         const data = await res.json().catch(() => ({}));
+        if (res.status === 403) {
+          // account disabled
+          if (typeof window !== "undefined") window.location.href = "/login";
+          return;
+        }
         setMe(data.user ?? null);
       } catch {
         setMe(null);
@@ -47,7 +52,6 @@ export default function UsersPage() {
     return r === "ADMIN" || r === "SHOP_OWNER";
   }, [me?.role]);
 
-  // Auth / role guard
   if (me === null) {
     if (typeof window !== "undefined") window.location.href = "/login";
     return null;
@@ -62,7 +66,6 @@ export default function UsersPage() {
     try {
       const res = await fetch("/api/users", { credentials: "include" });
       const data = await res.json().catch(() => ({}));
-
       if (!res.ok) {
         setErr(data.error ?? "Failed to load users");
         setUsers([]);
@@ -81,7 +84,6 @@ export default function UsersPage() {
 
   function buildInvite(email?: string, tempPassword?: string) {
     if (!email || !tempPassword) return "";
-
     const appUrl =
       typeof window !== "undefined"
         ? window.location.origin
@@ -119,14 +121,40 @@ Please login and change your password immediately.
     load();
   }
 
+  async function setUserActive(userId: string, isActive: boolean) {
+    const ok = confirm(
+      isActive
+        ? "Enable this user?"
+        : "Disable this user?\n\nDisabled users will be blocked from login and API access."
+    );
+    if (!ok) return;
+
+    setErr(null);
+    try {
+      const res = await fetch(`/api/users/${userId}/status`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(data.error ?? "Update failed");
+        return;
+      }
+      load();
+    } catch (e: any) {
+      alert(e?.message ?? "Update failed");
+    }
+  }
+
   return (
-    <main className="p-4 md:p-6 space-y-4 pb-24 md:pb-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <main className="p-4 md:p-6 space-y-4">
+      <div className="flex items-start md:items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold">Users</h1>
-          <p className="text-sm text-gray-500">
-            Create users and manage access.
-          </p>
+          <p className="text-sm text-gray-500">Create users and manage access.</p>
         </div>
 
         <button
@@ -175,16 +203,17 @@ Please login and change your password immediately.
         </div>
       )}
 
-      {/* ✅ Mobile cards */}
+      {/* Mobile cards */}
       <div className="md:hidden space-y-3">
         {users.map((u) => {
           const stores = (u?.stores ?? []).map((s: any) => s?.name).filter(Boolean);
           const storesText = stores.length ? stores.join(", ") : "-";
+          const disabled = u?.isActive === false;
 
           return (
             <div key={u.id} className="border rounded-2xl bg-white p-4 space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
                   <div className="font-semibold truncate">{u.name || "-"}</div>
                   <div className="text-sm text-gray-600 truncate">{u.email}</div>
                 </div>
@@ -196,25 +225,37 @@ Please login and change your password immediately.
 
               <div className="text-sm">
                 <div className="text-xs text-gray-500 mb-1">Stores</div>
-                <div className="text-gray-800 break-words whitespace-normal">{storesText}</div>
+                <div className="text-gray-800 break-words">{storesText}</div>
               </div>
 
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span
                   className={cls(
                     "text-xs px-2 py-1 rounded-full",
-                    u.mustChangePassword ? "bg-yellow-50 text-yellow-800" : "bg-green-50 text-green-800"
+                    disabled
+                      ? "bg-gray-100 text-gray-700"
+                      : u.mustChangePassword
+                      ? "bg-yellow-50 text-yellow-800"
+                      : "bg-green-50 text-green-800"
                   )}
                 >
                   {statusLabel(u)}
                 </span>
 
-                <button
-                  className="text-sm underline"
-                  onClick={() => resetPassword(u.id)}
-                >
-                  Reset Password
-                </button>
+                <div className="flex items-center gap-3">
+                  {!disabled ? (
+                    <button className="text-sm underline" onClick={() => resetPassword(u.id)}>
+                      Reset Password
+                    </button>
+                  ) : null}
+
+                  <button
+                    className="text-sm underline"
+                    onClick={() => setUserActive(u.id, disabled)}
+                  >
+                    {disabled ? "Enable" : "Disable"}
+                  </button>
+                </div>
               </div>
             </div>
           );
@@ -227,34 +268,51 @@ Please login and change your password immediately.
         )}
       </div>
 
-      {/* ✅ Desktop table */}
+      {/* Desktop table */}
       <div className="hidden md:block border rounded-xl overflow-hidden bg-white">
-        <div className="grid grid-cols-6 bg-gray-50 text-sm font-medium p-3">
+        <div className="grid grid-cols-7 bg-gray-50 text-sm font-medium p-3">
           <div>Name</div>
           <div>Email</div>
           <div>Role</div>
           <div>Stores</div>
           <div>Status</div>
-          <div>Actions</div>
+          <div className="col-span-2">Actions</div>
         </div>
 
-        {users.map((u) => (
-          <div key={u.id} className="grid grid-cols-6 p-3 text-sm border-t">
-            <div className="min-w-0 truncate">{u.name || "-"}</div>
-            <div className="min-w-0 truncate">{u.email}</div>
-            <div>{roleLabel(u.role)}</div>
-            <div className="min-w-0 truncate">
-              {u.stores?.map((s: any) => s.name).join(", ") || "-"}
-            </div>
-            <div className="text-xs text-gray-600">{statusLabel(u)}</div>
+        {users.map((u) => {
+          const disabled = u?.isActive === false;
+          return (
+            <div key={u.id} className="grid grid-cols-7 p-3 text-sm border-t items-center">
+              <div className="min-w-0 truncate">{u.name || "-"}</div>
+              <div className="min-w-0 truncate">{u.email}</div>
+              <div>{roleLabel(u.role)}</div>
+              <div className="min-w-0 truncate">
+                {u.stores?.map((s: any) => s.name).join(", ") || "-"}
+              </div>
 
-            <div>
-              <button className="text-sm underline" onClick={() => resetPassword(u.id)}>
-                Reset Password
-              </button>
+              <div className="text-xs text-gray-600">{statusLabel(u)}</div>
+
+              <div className="flex items-center gap-3">
+                {!disabled ? (
+                  <button className="text-sm underline" onClick={() => resetPassword(u.id)}>
+                    Reset Password
+                  </button>
+                ) : null}
+
+                <button
+                  className="text-sm underline"
+                  onClick={() => setUserActive(u.id, disabled)}
+                >
+                  {disabled ? "Enable" : "Disable"}
+                </button>
+              </div>
+
+              <div className="text-xs text-gray-500">
+                {u.disabledAt && disabled ? `Disabled: ${new Date(u.disabledAt).toLocaleString()}` : ""}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         {users.length === 0 && (
           <div className="p-4 text-sm text-gray-500">No users yet.</div>

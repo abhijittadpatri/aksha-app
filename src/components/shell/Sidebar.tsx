@@ -10,7 +10,7 @@ type Me = {
   email: string;
   role: "ADMIN" | "SHOP_OWNER" | "DOCTOR" | "BILLING";
   tenant?: { name?: string | null } | null;
-  stores?: { id: string; name: string; city?: string | null }[];
+  stores?: { id: string; name: string; city?: string | null; isActive?: boolean }[];
 };
 
 function NavItem({
@@ -46,6 +46,13 @@ export default function Sidebar() {
     (async () => {
       try {
         const res = await fetch("/api/me", { credentials: "include" });
+
+        // ✅ logged out / disabled user / forbidden
+        if (res.status === 401 || res.status === 403) {
+          if (typeof window !== "undefined") window.location.href = "/login";
+          return;
+        }
+
         const data = await res.json().catch(() => ({}));
         const user: Me | null = data.user ?? null;
         setMe(user);
@@ -54,28 +61,41 @@ export default function Sidebar() {
 
         const saved = localStorage.getItem("activeStoreId");
 
-        if (user?.stores?.length) {
-          // Default selection
+        const allStores = user?.stores ?? [];
+        const activeStores = allStores.filter((s) => s?.isActive !== false);
+
+        const isOwner = user?.role === "SHOP_OWNER";
+
+        if (activeStores.length) {
           if (!saved) {
-            const def = user.role === "SHOP_OWNER" ? "all" : user.stores[0].id;
+            const def = isOwner ? "all" : activeStores[0].id;
             localStorage.setItem("activeStoreId", def);
             setActiveStoreId(def);
             return;
           }
 
-          // Non-owners cannot stay on "all"
-          if (saved === "all" && user.role !== "SHOP_OWNER") {
-            const def = user.stores[0].id;
+          if (saved === "all" && !isOwner) {
+            const def = activeStores[0].id;
             localStorage.setItem("activeStoreId", def);
             setActiveStoreId(def);
             return;
+          }
+
+          if (saved !== "all") {
+            const stillValid = activeStores.some((s) => s.id === saved);
+            if (!stillValid) {
+              const def = isOwner ? "all" : activeStores[0].id;
+              localStorage.setItem("activeStoreId", def);
+              setActiveStoreId(def);
+              return;
+            }
           }
 
           setActiveStoreId(saved);
           return;
         }
 
-        // No stores (edge)
+        // No active stores (edge)
         setActiveStoreId(saved ?? "");
       } catch {
         setMe(null);
@@ -83,7 +103,23 @@ export default function Sidebar() {
     })();
   }, []);
 
+  // Keep state in sync if localStorage changes (other tabs)
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key === "activeStoreId") {
+        setActiveStoreId(String(e.newValue ?? ""));
+      }
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   const isOwner = me?.role === "SHOP_OWNER";
+
+  // ✅ only show active stores in dropdown
+  const activeStores = useMemo(() => {
+    return (me?.stores ?? []).filter((s) => s?.isActive !== false);
+  }, [me?.stores]);
 
   const nav = useMemo(() => {
     const role = me?.role;
@@ -94,6 +130,7 @@ export default function Sidebar() {
       { href: "/patients", label: "Patients", roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"] },
       { href: "/invoices", label: "Invoices", roles: ["ADMIN", "SHOP_OWNER", "BILLING"] },
       { href: "/users", label: "Users", roles: ["ADMIN", "SHOP_OWNER"] },
+      { href: "/stores", label: "Stores", roles: ["ADMIN", "SHOP_OWNER"] },
     ];
 
     return items.filter((it) => !it.roles || (role && it.roles.includes(role)));
@@ -114,7 +151,9 @@ export default function Sidebar() {
       <div className="flex items-start justify-between">
         <div>
           <div className="text-lg font-semibold leading-tight">Aksha</div>
-          <div className="text-xs text-gray-500">{me?.tenant?.name ?? "Clinic Chain"}</div>
+          <div className="text-xs text-gray-500">
+            {me?.tenant?.name ?? "Clinic Chain"}
+          </div>
         </div>
 
         {me?.role && (
@@ -125,7 +164,7 @@ export default function Sidebar() {
       </div>
 
       {/* Store Switcher */}
-      {me?.stores?.length ? (
+      {activeStores.length ? (
         <div className="space-y-1">
           <div className="text-xs text-gray-500">Active Store</div>
 
@@ -135,17 +174,16 @@ export default function Sidebar() {
             onChange={(e) => {
               const v = e.target.value;
 
-              // Only SHOP_OWNER can pick "all"
               if (v === "all" && !isOwner) return;
 
               localStorage.setItem("activeStoreId", v);
-              setActiveStoreId(v); // ✅ instant UI update
+              setActiveStoreId(v);
               router.refresh();
             }}
           >
             {isOwner && <option value="all">All Stores (Consolidated)</option>}
 
-            {me.stores.map((s) => (
+            {activeStores.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name} {s.city ? `(${s.city})` : ""}
               </option>
@@ -154,12 +192,13 @@ export default function Sidebar() {
 
           {isOwner && (
             <div className="text-[11px] text-gray-500">
-              Tip: Select <span className="font-medium">All Stores</span> to see consolidated totals.
+              Tip: Select <span className="font-medium">All Stores</span> to see
+              consolidated totals.
             </div>
           )}
         </div>
       ) : (
-        <div className="text-xs text-gray-500">Loading stores…</div>
+        <div className="text-xs text-gray-500">No active stores…</div>
       )}
 
       {/* Nav */}
@@ -181,7 +220,9 @@ export default function Sidebar() {
       {me ? (
         <div className="border-t pt-3 flex items-center justify-between">
           <div className="min-w-0">
-            <div className="text-sm font-medium truncate">{me.name || me.email}</div>
+            <div className="text-sm font-medium truncate">
+              {me.name || me.email}
+            </div>
             <div className="text-xs text-gray-500 truncate">{me.email}</div>
           </div>
 
