@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 function money(n: any) {
@@ -7,154 +8,182 @@ function money(n: any) {
   return x.toFixed(2);
 }
 
-function pickNumber(obj: any, keys: string[], fallback = 0) {
-  for (const k of keys) {
-    const v = obj?.[k];
-    const n = Number(v);
-    if (Number.isFinite(n)) return n;
-  }
-  return fallback;
+function pct(v: any) {
+  if (v === null || v === undefined) return "—";
+  const n = Number(v);
+  if (!Number.isFinite(n)) return "—";
+  return `${n >= 0 ? "+" : ""}${n.toFixed(1)}%`;
 }
 
-function safeJson(text: string) {
-  try {
-    return text ? JSON.parse(text) : {};
-  } catch {
-    return {};
-  }
+function signedMoney(n: any) {
+  const x = Number(n || 0);
+  const sign = x >= 0 ? "+" : "-";
+  return `${sign}₹${money(Math.abs(x))}`;
 }
 
 function cls(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
 }
 
+type MetricDelta = { value: number; delta: number; deltaPct: number };
+type AggBlock = {
+  invoiceCount: MetricDelta;
+  unpaidCount: MetricDelta;
+  grossRevenue: MetricDelta;
+  paidRevenue: MetricDelta;
+  avgInvoiceValue: MetricDelta;
+};
+
+type InsightsOverviewResponse = {
+  scope?: { id?: string; name?: string };
+  tenant?: { today?: AggBlock; month?: AggBlock };
+};
+
+type Me = {
+  role: "ADMIN" | "SHOP_OWNER" | "DOCTOR" | "BILLING";
+  tenant?: { name?: string | null } | null;
+};
+
 export default function DashboardPage() {
-  const [metrics, setMetrics] = useState<any>(null);
-  const [store, setStore] = useState<{ id: string; name: string } | null>(null);
+  const [me, setMe] = useState<Me | null | undefined>(undefined);
+  const [data, setData] = useState<InsightsOverviewResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const startLabel = useMemo(() => new Date().toLocaleDateString(), []);
+  const activeStoreId =
+    typeof window !== "undefined" ? localStorage.getItem("activeStoreId") : "";
 
-  function getActiveStoreId() {
-    if (typeof window === "undefined") return "";
-    return localStorage.getItem("activeStoreId") || "";
+  const qs = useMemo(() => {
+    if (!activeStoreId) return "";
+    return `?storeId=${encodeURIComponent(activeStoreId)}`;
+  }, [activeStoreId]);
+
+  async function loadMe() {
+    try {
+      const res = await fetch("/api/me", { credentials: "include" });
+      const json = await res.json().catch(() => ({}));
+      setMe((json.user as Me) ?? null);
+    } catch {
+      setMe(null);
+    }
   }
 
   async function load() {
     setErr(null);
     setLoading(true);
-
     try {
-      const activeStoreId = getActiveStoreId();
-      const qs = activeStoreId ? `?storeId=${encodeURIComponent(activeStoreId)}` : "";
-      const res = await fetch(`/api/dashboard/metrics${qs}`, { credentials: "include" });
+      // ✅ Use the stable endpoint you already have working
+      const res = await fetch(`/api/insights/overview${qs}`, {
+        credentials: "include",
+      });
 
       const text = await res.text();
-      const data = safeJson(text);
+      let json: any = {};
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        json = {};
+      }
 
       if (!res.ok) {
-        setErr(data.error ?? "Failed to load dashboard metrics");
-        setMetrics(null);
-        setStore(null);
+        setErr(json.error ?? "Failed to load dashboard");
+        setData(null);
+        setLoading(false);
         return;
       }
 
-      setStore(data.store ?? null);
-      setMetrics(data.metrics ?? data);
+      setData(json);
+      setLoading(false);
     } catch (e: any) {
-      setErr(e?.message ?? "Dashboard load error");
-      setMetrics(null);
-      setStore(null);
-    } finally {
+      setErr(e?.message ?? "Failed to load dashboard");
+      setData(null);
       setLoading(false);
     }
   }
 
-  // initial load
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadMe();
   }, []);
 
-  // reload when store changes:
-  // 1) other-tab localStorage changes -> "storage" event
-  // 2) same-tab: we listen to a custom event we can dispatch anywhere
+  useEffect(() => {
+    if (me === undefined) return;
+    if (me === null) return;
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me?.role, qs]);
+
+  // Reload when store changes in other tabs
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key === "activeStoreId") load();
     }
-
-    function onActiveStoreChanged() {
-      load();
-    }
-
     window.addEventListener("storage", onStorage);
-    window.addEventListener("activeStoreIdChanged", onActiveStoreChanged as any);
 
-    // safety fallback: if something changes localStorage without dispatching event,
-    // we do a very light check (no interval spam)
-    let last = getActiveStoreId();
+    // Same-tab changes: lightweight poll (keeps MVP simple)
     const t = setInterval(() => {
-      const now = getActiveStoreId();
-      if (now !== last) {
-        last = now;
-        load();
-      }
-    }, 2500);
+      const current = localStorage.getItem("activeStoreId") || "";
+      // if query would change, refresh
+      if (current !== (activeStoreId || "")) load();
+    }, 1400);
 
     return () => {
       window.removeEventListener("storage", onStorage);
-      window.removeEventListener("activeStoreIdChanged", onActiveStoreChanged as any);
       clearInterval(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activeStoreId]);
 
-  // metrics (support old/new keys)
-  const todaySalesGross = pickNumber(metrics, ["todaySalesGross", "todaySales", "salesToday"], 0);
-  const todaySalesPaid = pickNumber(metrics, ["todaySalesPaid"], 0);
-  const invoicesToday = pickNumber(metrics, ["invoicesToday", "todayInvoiceCount"], 0);
-  const unpaidInvoicesToday = pickNumber(metrics, ["unpaidInvoicesToday"], 0);
-  const ordersToday = pickNumber(metrics, ["todayOrderCount", "ordersToday"], 0);
+  // Redirect guards
+  if (me === null) {
+    if (typeof window !== "undefined") window.location.href = "/login";
+    return null;
+  }
 
-  const scopeText = store?.name
-    ? store.name
-    : getActiveStoreId() === "all"
-    ? "All Stores"
-    : "Store";
+  const tenantToday = data?.tenant?.today;
+  const tenantMonth = data?.tenant?.month;
+
+  const scopeLabel =
+    (data?.scope?.id === "all" ? "All Stores" : data?.scope?.name) ??
+    (activeStoreId === "all" ? "All Stores" : "Store");
+
+  const deltaPill = (delta: number, deltaPctVal: number) => {
+    const up = delta >= 0;
+    return (
+      <span
+        className={cls(
+          "text-[11px] px-2 py-1 rounded-full whitespace-nowrap",
+          up ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
+        )}
+      >
+        {signedMoney(delta)} ({pct(deltaPctVal)})
+      </span>
+    );
+  };
+
+  const canSeeInsights = me?.role === "ADMIN" || me?.role === "SHOP_OWNER";
+  const canSeePatients =
+    me?.role === "ADMIN" ||
+    me?.role === "SHOP_OWNER" ||
+    me?.role === "DOCTOR" ||
+    me?.role === "BILLING";
+  const canSeeInvoices =
+    me?.role === "ADMIN" || me?.role === "SHOP_OWNER" || me?.role === "BILLING";
 
   return (
     <main className="p-4 md:p-6">
       <div className="page space-y-4">
-        {/* Header: mobile stack, desktop row */}
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div className="flex items-end justify-between gap-3 flex-wrap">
           <div className="min-w-0">
             <h1 className="h1">Dashboard</h1>
-
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
-                {scopeText}
-              </span>
-              <span className="text-xs text-gray-500">{startLabel}</span>
-              {loading ? (
-                <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
-                  Updating…
-                </span>
-              ) : (
-                <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700">
-                  Live
-                </span>
-              )}
-            </div>
+            <p className="subtle truncate">
+              Scope: {scopeLabel}
+              {me?.tenant?.name ? ` • ${me.tenant.name}` : ""}
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
             <button
-              className={cls(
-                "border rounded-lg px-3 py-2 text-sm",
-                loading && "opacity-60"
-              )}
+              className="btn btn-ghost border"
               onClick={load}
               disabled={loading}
               title="Refresh"
@@ -166,60 +195,81 @@ export default function DashboardPage() {
 
         {err && <div className="text-sm text-red-600">{err}</div>}
 
-        {!metrics && !err && (
-          <div className="subtle">{loading ? "Loading metrics…" : "Loading…"}</div>
+        {!data && !err && (
+          <div className="subtle">{loading ? "Loading…" : "No data yet."}</div>
         )}
 
-        {metrics && (
+        {data && (
           <>
-            {/* KPIs: 2 columns on mobile, 4 on desktop */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {/* KPIs */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div className="card card-pad">
-                <div className="subtle">Today Gross</div>
-                <div className="text-xl md:text-2xl font-semibold mt-1">
-                  ₹{money(todaySalesGross)}
-                </div>
-                <div className="text-[11px] text-gray-500 mt-1">
-                  Total billed today
+                <div className="subtle">Today • Gross</div>
+                <div className="kpi">₹{money(tenantToday?.grossRevenue?.value ?? 0)}</div>
+                <div className="mt-2">
+                  {deltaPill(
+                    tenantToday?.grossRevenue?.delta ?? 0,
+                    tenantToday?.grossRevenue?.deltaPct ?? 0
+                  )}
                 </div>
               </div>
 
               <div className="card card-pad">
-                <div className="subtle">Today Paid</div>
-                <div className="text-xl md:text-2xl font-semibold mt-1">
-                  ₹{money(todaySalesPaid)}
-                </div>
-                <div className="text-[11px] text-gray-500 mt-1">
-                  Collected today
-                </div>
-              </div>
-
-              <div className="card card-pad">
-                <div className="subtle">Invoices</div>
-                <div className="text-xl md:text-2xl font-semibold mt-1">
-                  {invoicesToday}
-                </div>
-                <div className="text-[11px] text-gray-500 mt-1">
-                  Unpaid: {unpaidInvoicesToday}
+                <div className="subtle">Today • Paid</div>
+                <div className="kpi">₹{money(tenantToday?.paidRevenue?.value ?? 0)}</div>
+                <div className="mt-2">
+                  {deltaPill(
+                    tenantToday?.paidRevenue?.delta ?? 0,
+                    tenantToday?.paidRevenue?.deltaPct ?? 0
+                  )}
                 </div>
               </div>
 
               <div className="card card-pad">
-                <div className="subtle">Orders</div>
-                <div className="text-xl md:text-2xl font-semibold mt-1">
-                  {ordersToday}
+                <div className="subtle">Today • Invoices</div>
+                <div className="kpi">{tenantToday?.invoiceCount?.value ?? 0}</div>
+                <div className="mt-2">
+                  <span className="text-xs text-gray-500">
+                    Unpaid: {tenantToday?.unpaidCount?.value ?? 0}
+                  </span>
                 </div>
-                <div className="text-[11px] text-gray-500 mt-1">
-                  Next: order pipeline
+              </div>
+
+              <div className="card card-pad">
+                <div className="subtle">This Month • Gross</div>
+                <div className="kpi">₹{money(tenantMonth?.grossRevenue?.value ?? 0)}</div>
+                <div className="mt-2">
+                  {deltaPill(
+                    tenantMonth?.grossRevenue?.delta ?? 0,
+                    tenantMonth?.grossRevenue?.deltaPct ?? 0
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Placeholder section: keep it compact on mobile */}
+            {/* Quick Actions */}
             <div className="card card-pad">
-              <div className="h2">This week</div>
+              <div className="h2">Quick actions</div>
               <div className="subtle mt-1">
-                Next: payment split (Cash/UPI/Card), unpaid aging, and staff productivity.
+                Jump to the most-used pages.
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {canSeePatients && (
+                  <Link className="btn btn-primary" href="/patients">
+                    Patients
+                  </Link>
+                )}
+                {canSeeInvoices && (
+                  <Link className="btn btn-ghost border" href="/invoices">
+                    Invoices
+                  </Link>
+                )}
+                {canSeeInsights && (
+                  <Link className="btn btn-ghost border" href="/insights">
+                    Insights
+                  </Link>
+                )}
               </div>
             </div>
           </>

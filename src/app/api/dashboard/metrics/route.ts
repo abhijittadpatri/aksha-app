@@ -8,7 +8,6 @@ function getUserId(req: NextRequest) {
 }
 
 function todayRangeIST() {
-  // Compute start/end of today in Asia/Kolkata, but return as UTC Date objects
   const offsetMs = 330 * 60 * 1000; // +05:30
   const now = new Date();
 
@@ -59,7 +58,22 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "User not found" }, { status: 401 });
     }
 
-    const allowedStoreIds = (user.stores ?? []).map((s) => s.storeId);
+    const isOwner = user.role === "SHOP_OWNER";
+
+    // ✅ allowed store ids from mapping
+    let allowedStoreIds = (user.stores ?? []).map((s) => s.storeId);
+
+    // ✅ IMPORTANT FIX:
+    // SHOP_OWNER should have access tenant-wide even if not explicitly mapped
+    if (isOwner && allowedStoreIds.length === 0) {
+      const allStores = await prisma.store.findMany({
+        where: { tenantId: user.tenantId },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+      });
+      allowedStoreIds = allStores.map((s) => s.id);
+    }
+
     if (allowedStoreIds.length === 0) {
       return NextResponse.json({ error: "No store access" }, { status: 403 });
     }
@@ -67,19 +81,16 @@ export async function GET(req: NextRequest) {
     const url = new URL(req.url);
     const storeIdParam = url.searchParams.get("storeId");
 
-    // ✅ Your schema role is SHOP_OWNER (not OWNER)
-    const isOwner = user.role === "SHOP_OWNER";
     const isAllStores = isOwner && storeIdParam === "all";
 
-    // If not ALL, enforce storeId within allowed stores
-    const storeId =
-      storeIdParam && allowedStoreIds.includes(storeIdParam)
-        ? storeIdParam
-        : allowedStoreIds[0];
+    // Pick store scope
+    let storeId = allowedStoreIds[0];
+    if (!isAllStores && storeIdParam && allowedStoreIds.includes(storeIdParam)) {
+      storeId = storeIdParam;
+    }
 
     const { startUtc, endUtc } = todayRangeIST();
 
-    // Build where clause (all stores vs single store)
     const baseWhere: any = {
       tenantId: user.tenantId,
       createdAt: { gte: startUtc, lt: endUtc },
@@ -88,26 +99,15 @@ export async function GET(req: NextRequest) {
 
     const invoicesToday = await prisma.invoice.count({ where: baseWhere });
 
-    // Count unpaid invoices today (normalize to schema default "Unpaid")
-    const unpaidInvoicesToday = await prisma.invoice.count({
-      where: {
-        ...baseWhere,
-        // Prisma string enum not enforced here, so we filter in DB broadly:
-        paymentStatus: { in: ["Unpaid", "UNPAID", "unpaid", "UNPAID "] },
-      },
-    });
-
-    // Pull today's invoices and sum totals from totalsJson (TS-safe, no Prisma _sum typing issues)
+    // Instead of brittle IN list, pull status + totals and compute properly
     const todayInvoices = await prisma.invoice.findMany({
       where: baseWhere,
-      select: {
-        paymentStatus: true,
-        totalsJson: true,
-      },
+      select: { paymentStatus: true, totalsJson: true },
     });
 
     let todaySalesGross = 0;
     let todaySalesPaid = 0;
+    let unpaidInvoicesToday = 0;
 
     for (const inv of todayInvoices) {
       const tj: any = inv.totalsJson ?? {};
@@ -115,21 +115,22 @@ export async function GET(req: NextRequest) {
 
       todaySalesGross += total;
 
-      if (isPaidStatus(inv.paymentStatus)) {
-        todaySalesPaid += total;
-      }
+      if (isPaidStatus(inv.paymentStatus)) todaySalesPaid += total;
+      if (isUnpaidStatus(inv.paymentStatus)) unpaidInvoicesToday += 1;
     }
 
     // Response store label
     const store =
-      !isAllStores ? user.stores.find((s) => s.storeId === storeId)?.store : null;
+      !isAllStores
+        ? user.stores.find((s) => s.storeId === storeId)?.store
+        : null;
 
     return NextResponse.json({
       store: isAllStores
         ? { id: "all", name: "All Stores" }
         : store
-        ? { id: store.id, name: store.name }
-        : { id: storeId, name: "Store" },
+          ? { id: store.id, name: store.name }
+          : { id: storeId, name: "Store" },
       range: { startUtc: startUtc.toISOString(), endUtc: endUtc.toISOString() },
       metrics: {
         invoicesToday,
