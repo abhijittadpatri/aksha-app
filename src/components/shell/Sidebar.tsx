@@ -77,6 +77,7 @@ export default function Sidebar() {
 
     const items: { href: string; label: string; roles?: Array<Me["role"]> }[] = [
       { href: "/dashboard", label: "Dashboard" },
+      { href: "/insights", label: "Insights", roles: ["ADMIN", "SHOP_OWNER"] },
       { href: "/patients", label: "Patients", roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"] },
       { href: "/invoices", label: "Invoices", roles: ["ADMIN", "SHOP_OWNER", "BILLING"] },
       { href: "/users", label: "Users", roles: ["ADMIN", "SHOP_OWNER"] },

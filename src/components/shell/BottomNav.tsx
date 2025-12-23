@@ -52,6 +52,7 @@ export default function BottomNav() {
     // IMPORTANT: schema uses SHOP_OWNER (not OWNER)
     const items: { href: string; label: string; roles?: Me["role"][] }[] = [
       { href: "/dashboard", label: "Home" },
+      { href: "/insights", label: "Insights", roles: ["ADMIN", "SHOP_OWNER"] },
       { href: "/patients", label: "Patients", roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"] },
       { href: "/invoices", label: "Invoices", roles: ["ADMIN", "SHOP_OWNER", "BILLING"] },
       { href: "/users", label: "Users", roles: ["ADMIN", "SHOP_OWNER"] },
