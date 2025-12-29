@@ -1,45 +1,29 @@
 // src/app/layout.tsx
 import "./globals.css";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 
-<head>
-  <link rel="manifest" href="/manifest.webmanifest" />
-<link rel="apple-touch-icon" href="/icons/icon-192.png" />
-<meta name="theme-color" content="#111111" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="default" />
-
-</head>
-
-export const metadata = {
+export const metadata: Metadata = {
   title: "Aksha",
   applicationName: "Aksha",
   manifest: "/manifest.webmanifest",
-  themeColor: "#111111",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
     title: "Aksha",
   },
+  icons: {
+    apple: "/icons/icon-192.png",
+  },
 };
 
+export const viewport: Viewport = {
+  themeColor: "#111111",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        {/* PWA */}
-        <link rel="manifest" href="/manifest.webmanifest" />
-        <meta name="theme-color" content="#111111" />
-
-        {/* iOS PWA */}
-        <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="Aksha" />
-        <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-      </head>
-
       <body>
         {children}
 

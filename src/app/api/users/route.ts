@@ -76,6 +76,24 @@ function canCreateRole(creatorRole: string, targetRole: string) {
   return false;
 }
 
+// Helper mapper (keeps response consistent)
+function mapUser(u: any) {
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    role: u.role,
+
+    // ✅ important: status fields for UI
+    isActive: u.isActive ?? true,
+    disabledAt: u.disabledAt ?? null,
+    mustChangePassword: (u as any).mustChangePassword ?? false,
+
+    createdAt: u.createdAt,
+    stores: (u.stores ?? []).map((s: any) => s.store),
+  };
+}
+
 // =====================
 // GET /api/users
 // - SHOP_OWNER: all users in tenant
@@ -96,17 +114,7 @@ export async function GET(req: NextRequest) {
         include: { stores: { include: { store: true } } },
       });
 
-      return NextResponse.json({
-        users: users.map((u) => ({
-          id: u.id,
-          email: u.email,
-          name: u.name,
-          role: u.role,
-          mustChangePassword: (u as any).mustChangePassword ?? false,
-          createdAt: u.createdAt,
-          stores: (u.stores ?? []).map((s) => s.store),
-        })),
-      });
+      return NextResponse.json({ users: users.map(mapUser) });
     }
 
     // ADMIN: only users who have any store that admin has access to
@@ -119,17 +127,7 @@ export async function GET(req: NextRequest) {
       include: { stores: { include: { store: true } } },
     });
 
-    return NextResponse.json({
-      users: users.map((u) => ({
-        id: u.id,
-        email: u.email,
-        name: u.name,
-        role: u.role,
-        mustChangePassword: (u as any).mustChangePassword ?? false,
-        createdAt: u.createdAt,
-        stores: (u.stores ?? []).map((s) => s.store),
-      })),
-    });
+    return NextResponse.json({ users: users.map(mapUser) });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "Users GET error" }, { status: 500 });
   }
@@ -158,12 +156,18 @@ export async function POST(req: NextRequest) {
     const tempPassword = String(body.tempPassword ?? "");
 
     if (!email) return NextResponse.json({ error: "Email is required" }, { status: 400 });
-    if (!storeIds.length) return NextResponse.json({ error: "Select at least one store" }, { status: 400 });
+    if (!storeIds.length)
+      return NextResponse.json({ error: "Select at least one store" }, { status: 400 });
 
     // Enforce role policy
     if (!canCreateRole(me.role, role)) {
       return NextResponse.json(
-        { error: role === "SHOP_OWNER" ? "Shop owners must be created manually" : "Not allowed to create this role" },
+        {
+          error:
+            role === "SHOP_OWNER"
+              ? "Shop owners must be created manually"
+              : "Not allowed to create this role",
+        },
         { status: 403 }
       );
     }
@@ -173,7 +177,10 @@ export async function POST(req: NextRequest) {
       // Admin can only assign within their own stores
       const bad = storeIds.find((id: string) => !me.allowedStoreIds.includes(id));
       if (bad) {
-        return NextResponse.json({ error: "You can only assign users to your stores" }, { status: 403 });
+        return NextResponse.json(
+          { error: "You can only assign users to your stores" },
+          { status: 403 }
+        );
       }
     } else {
       // SHOP_OWNER: ensure stores belong to tenant (safety)
@@ -181,7 +188,10 @@ export async function POST(req: NextRequest) {
         where: { id: { in: storeIds }, tenantId: me.tenantId },
       });
       if (count !== storeIds.length) {
-        return NextResponse.json({ error: "One or more stores are invalid for this tenant" }, { status: 400 });
+        return NextResponse.json(
+          { error: "One or more stores are invalid for this tenant" },
+          { status: 400 }
+        );
       }
     }
 
@@ -204,6 +214,8 @@ export async function POST(req: NextRequest) {
         role: role as any,
         passwordHash,
         mustChangePassword: true,
+        isActive: true, // ✅ explicit default
+        disabledAt: null,
         stores: {
           create: storeIds.map((storeId: string) => ({ storeId })),
         },
@@ -212,14 +224,7 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({
-      user: {
-        id: created.id,
-        email: created.email,
-        name: created.name,
-        role: created.role,
-        mustChangePassword: (created as any).mustChangePassword ?? true,
-        stores: (created.stores ?? []).map((s) => s.store),
-      },
+      user: mapUser(created),
       invite: {
         email: created.email,
         tempPassword: tempPassword.trim(),

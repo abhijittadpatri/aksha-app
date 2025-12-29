@@ -1,3 +1,4 @@
+// src/components/shell/AppShell.tsx
 "use client";
 
 import { useEffect, useState } from "react";
