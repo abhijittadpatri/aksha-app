@@ -1,28 +1,47 @@
+// src/components/shell/BottomNav.tsx
 "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
+import { Home, Users, Receipt, BarChart3, Store, Settings, ChevronDown, X } from "lucide-react";
 
 type Me = {
   role: "ADMIN" | "SHOP_OWNER" | "DOCTOR" | "BILLING";
 };
 
-type TabItem = { href: string; label: string; roles?: Me["role"][] };
+type TabItem = {
+  href: string;
+  label: string;
+  roles?: Me["role"][];
+  icon: React.ReactNode;
+};
+
+function cls(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
 
 function isActivePath(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === "/dashboard" || pathname === "/";
   return pathname === href || pathname.startsWith(href + "/");
 }
 
+/**
+ * SaaS-standardized mobile bottom nav:
+ * - Brand-accented active state (uses CSS tokens)
+ * - Consistent button language via .btn for sheet actions
+ * - Safer spacing for iOS safe area + better tap targets
+ */
 function Tab({
   href,
   label,
+  icon,
   active,
   onClick,
 }: {
   href: string;
   label: string;
+  icon: React.ReactNode;
   active: boolean;
   onClick?: () => void;
 }) {
@@ -30,19 +49,25 @@ function Tab({
     <Link
       href={href}
       onClick={onClick as any}
-      className={[
-        "flex flex-col items-center justify-center px-1 py-2",
-        "text-[11px] leading-tight select-none",
-        active ? "font-semibold text-black" : "text-gray-600",
-      ].join(" ")}
+      aria-current={active ? "page" : undefined}
+      className={cls(
+        "flex flex-col items-center justify-center gap-1 py-2 select-none",
+        "text-[11px] leading-tight",
+        active ? "text-[rgb(var(--fg))]" : "text-[rgb(var(--fg-muted))]"
+      )}
     >
-      <span className="max-w-full truncate">{label}</span>
-      <span
-        className={[
-          "mt-1 h-1 w-6 rounded-full transition-opacity",
-          active ? "bg-black opacity-100" : "opacity-0",
-        ].join(" ")}
-      />
+      <div
+        className={cls(
+          "h-9 w-14 rounded-2xl flex items-center justify-center transition border",
+          active
+            ? "bg-[rgba(var(--brand),0.10)] border-[rgba(var(--brand),0.25)]"
+            : "border-transparent"
+        )}
+      >
+        <span className={cls("transition", active ? "opacity-100" : "opacity-80")}>{icon}</span>
+      </div>
+
+      <div className={cls("max-w-full truncate", active ? "font-semibold" : "font-medium")}>{label}</div>
     </Link>
   );
 }
@@ -64,10 +89,8 @@ export default function BottomNav() {
     })();
   }, []);
 
-  // Close "More" menu on route change
-  useEffect(() => {
-    setMoreOpen(false);
-  }, [pathname]);
+  // Close More sheet on route change
+  useEffect(() => setMoreOpen(false), [pathname]);
 
   // Hide on auth routes
   if (pathname.startsWith("/login") || pathname.startsWith("/change-password")) return null;
@@ -77,24 +100,24 @@ export default function BottomNav() {
     const role = me?.role;
 
     const items: TabItem[] = [
-      { href: "/dashboard", label: "Home" },
-      { href: "/patients", label: "Patients", roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"] },
-      { href: "/invoices", label: "Invoices", roles: ["ADMIN", "SHOP_OWNER", "BILLING"] },
-      { href: "/insights", label: "Insights", roles: ["ADMIN", "SHOP_OWNER"] },
-      { href: "/users", label: "Users", roles: ["ADMIN", "SHOP_OWNER"] },
-      { href: "/stores", label: "Stores", roles: ["ADMIN", "SHOP_OWNER"] },
+      { href: "/dashboard", label: "Home", icon: <Home size={18} />, roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"] },
+      { href: "/patients", label: "Patients", icon: <Users size={18} />, roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"] },
+      { href: "/invoices", label: "Invoices", icon: <Receipt size={18} />, roles: ["ADMIN", "SHOP_OWNER", "BILLING"] },
+      { href: "/insights", label: "Insights", icon: <BarChart3 size={18} />, roles: ["ADMIN", "SHOP_OWNER"] },
+      { href: "/stores", label: "Stores", icon: <Store size={18} />, roles: ["ADMIN", "SHOP_OWNER"] },
+      { href: "/users", label: "Users", icon: <Settings size={18} />, roles: ["ADMIN", "SHOP_OWNER"] },
     ];
 
     return items.filter((it) => !it.roles || (role && it.roles.includes(role)));
   }, [me?.role]);
 
-  // Show at most 3 items on the bar + "More" as 4th when overflow exists.
+  // Prefer showing these on bar (if available)
   const { barTabs, overflowTabs, needsMore } = useMemo(() => {
     const byHref = new Map(tabs.map((t) => [t.href, t]));
-    const order = ["/dashboard", "/patients", "/invoices", "/insights"];
+    const preferred = ["/dashboard", "/patients", "/invoices", "/insights"];
 
     const main: TabItem[] = [];
-    for (const href of order) {
+    for (const href of preferred) {
       const t = byHref.get(href);
       if (t) main.push(t);
     }
@@ -105,12 +128,10 @@ export default function BottomNav() {
     const _barTabs = (() => {
       if (!_needsMore) return main.slice(0, 4);
 
-      // keep 3 on bar; 4th is More
+      // keep 3 primary on bar; 4th is More
       const firstThree = main.slice(0, 3);
       let i = 0;
-      while (firstThree.length < 3 && i < remaining.length) {
-        firstThree.push(remaining[i++]);
-      }
+      while (firstThree.length < 3 && i < remaining.length) firstThree.push(remaining[i++]);
       return firstThree;
     })();
 
@@ -124,63 +145,116 @@ export default function BottomNav() {
 
   return (
     <>
-      {/* Overlay (tap outside to close) */}
+      {/* Backdrop */}
       {needsMore && moreOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-black/20"
+          className="md:hidden fixed inset-0 z-40 bg-black/30"
           onClick={() => setMoreOpen(false)}
+          aria-hidden="true"
         />
       )}
 
-      {/* More Sheet (fixed overlay above the bottom bar) */}
+      {/* More Bottom Sheet */}
       {needsMore && moreOpen && (
-        <div className="md:hidden fixed left-0 right-0 bottom-14 z-50">
-          <div className="mx-3 mb-2 rounded-2xl border bg-white shadow-lg overflow-hidden">
-            <div className="p-2 grid grid-cols-2 gap-2">
-              {overflowTabs.map((t) => (
-                <Link
-                  key={t.href}
-                  href={t.href}
-                  className={[
-                    "border rounded-xl px-3 py-2 text-sm",
-                    isActivePath(pathname, t.href)
-                      ? "bg-gray-100 font-medium"
-                      : "bg-white hover:bg-gray-50",
-                  ].join(" ")}
-                  onClick={() => setMoreOpen(false)}
-                >
-                  <div className="truncate">{t.label}</div>
-                </Link>
-              ))}
+        <div className="md:hidden fixed left-0 right-0 bottom-0 z-50">
+          <div
+            className={cls(
+              "mx-3 overflow-hidden",
+              "mb-[calc(72px+env(safe-area-inset-bottom))]",
+              "rounded-2xl border bg-white shadow-xl"
+            )}
+          >
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <div className="text-sm font-semibold">More</div>
+
+              {/* ✅ standardized icon button */}
+              <button
+                className="btn btn-ghost btn-icon-sm"
+                onClick={() => setMoreOpen(false)}
+                aria-label="Close"
+                type="button"
+              >
+                <X size={16} />
+              </button>
             </div>
+
+            <div className="p-3 grid grid-cols-2 gap-2">
+              {overflowTabs.map((t) => {
+                const active = isActivePath(pathname, t.href);
+
+                return (
+                  <Link
+                    key={t.href}
+                    href={t.href}
+                    onClick={() => setMoreOpen(false)}
+                    aria-current={active ? "page" : undefined}
+                    className={cls(
+                      // ✅ now uses your button system so it matches everywhere
+                      "btn btn-secondary justify-start gap-2 w-full",
+                      active && "bg-[rgba(var(--brand),0.12)] border-[rgba(var(--brand),0.25)]"
+                    )}
+                  >
+                    <span className={cls(active ? "opacity-100" : "opacity-80")}>{t.icon}</span>
+                    <span className="truncate">{t.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+
+            <div className="px-4 pb-3 text-[11px] text-gray-500">Tip: Use this menu for admin screens.</div>
           </div>
         </div>
       )}
 
       {/* Bottom Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t bg-white/90 backdrop-blur">
-        <div className="grid grid-cols-4">
+      <nav
+        className={cls(
+          "md:hidden fixed bottom-0 left-0 right-0 z-50 border-t",
+          "bg-white/85 backdrop-blur"
+        )}
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        aria-label="Bottom navigation"
+      >
+        <div className="grid grid-cols-4 px-2">
           {barTabs.map((t) => (
-            <Tab key={t.href} href={t.href} label={t.label} active={isActivePath(pathname, t.href)} />
+            <Tab
+              key={t.href}
+              href={t.href}
+              label={t.label}
+              icon={t.icon}
+              active={isActivePath(pathname, t.href)}
+            />
           ))}
 
           {needsMore ? (
             <button
               type="button"
-              className={[
-                "flex flex-col items-center justify-center px-1 py-2",
-                "text-[11px] leading-tight select-none",
-                moreIsActive || moreOpen ? "font-semibold text-black" : "text-gray-600",
-              ].join(" ")}
+              className={cls(
+                "flex flex-col items-center justify-center gap-1 py-2 select-none transition",
+                "text-[11px] leading-tight",
+                moreIsActive || moreOpen ? "text-[rgb(var(--fg))]" : "text-[rgb(var(--fg-muted))]"
+              )}
               onClick={() => setMoreOpen((v) => !v)}
+              aria-expanded={moreOpen}
+              aria-controls="bottomnav-more-sheet"
             >
-              <span className="max-w-full truncate">More</span>
-              <span
-                className={[
-                  "mt-1 h-1 w-6 rounded-full transition-opacity",
-                  moreIsActive || moreOpen ? "bg-black opacity-100" : "opacity-0",
-                ].join(" ")}
-              />
+              <div
+                className={cls(
+                  "h-9 w-14 rounded-2xl flex items-center justify-center transition border",
+                  moreIsActive || moreOpen
+                    ? "bg-[rgba(var(--brand),0.10)] border-[rgba(var(--brand),0.25)]"
+                    : "border-transparent"
+                )}
+              >
+                <ChevronDown
+                  size={18}
+                  className={cls("transition-transform", moreOpen ? "rotate-180" : "rotate-0")}
+                />
+              </div>
+
+              <div className={cls("max-w-full truncate", moreIsActive || moreOpen ? "font-semibold" : "font-medium")}>
+                More
+              </div>
             </button>
           ) : (
             <div />
@@ -188,8 +262,8 @@ export default function BottomNav() {
         </div>
       </nav>
 
-      {/* Spacer so content doesn't hide behind fixed bottom nav */}
-      <div className="md:hidden h-14" />
+      {/* Spacer so content doesn't hide behind bottom nav */}
+      <div className="md:hidden" style={{ height: `calc(72px + env(safe-area-inset-bottom))` }} />
     </>
   );
 }

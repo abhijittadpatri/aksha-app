@@ -4,7 +4,10 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 
 export const metadata: Metadata = {
-  title: "Aksha",
+  title: {
+    default: "Aksha",
+    template: "%s · Aksha",
+  },
   applicationName: "Aksha",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
@@ -19,20 +22,28 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#111111",
+  width: "device-width",
+  initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" suppressHydrationWarning>
+      <body className="min-h-screen antialiased">
         {children}
 
-        {/* Register Service Worker */}
+        {/* Register Service Worker (safe, non-blocking) */}
         <Script id="sw-register" strategy="afterInteractive">
           {`
             if ("serviceWorker" in navigator) {
               window.addEventListener("load", () => {
-                navigator.serviceWorker.register("/sw.js").catch(() => {});
+                navigator.serviceWorker
+                  .register("/sw.js")
+                  .catch(() => {});
               });
             }
           `}

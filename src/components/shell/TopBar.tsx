@@ -1,8 +1,10 @@
+// src/components/shell/TopBar.tsx
 "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { ChevronsUpDown, LogOut } from "lucide-react";
 
 type Me = {
   id: string;
@@ -10,23 +12,56 @@ type Me = {
   name?: string | null;
   role: "ADMIN" | "SHOP_OWNER" | "DOCTOR" | "BILLING";
   tenant?: { name?: string | null } | null;
-  stores?: { id: string; name: string; city?: string | null }[];
+  stores?: { id: string; name: string; city?: string | null; isActive?: boolean }[];
 };
+
+function cls(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
+
+function pageTitleFromPath(pathname: string) {
+  if (pathname === "/dashboard" || pathname === "/") return "Dashboard";
+  if (pathname.startsWith("/patients")) return "Patients";
+  if (pathname.startsWith("/invoices")) return "Invoices";
+  if (pathname.startsWith("/insights")) return "Insights";
+  if (pathname.startsWith("/users")) return "Users";
+  if (pathname.startsWith("/stores")) return "Stores";
+  return "Aksha";
+}
 
 export default function TopBar() {
   const router = useRouter();
   const pathname = usePathname();
-  const [me, setMe] = useState<Me | null | undefined>(undefined);
 
-  // Keep local state so UI updates immediately
+  const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [activeStoreId, setActiveStoreId] = useState<string>("");
 
   const isOwner = me?.role === "SHOP_OWNER";
 
+  // Hide on auth routes
+  if (pathname.startsWith("/login") || pathname.startsWith("/change-password")) return null;
+
+  // Sync store id from other tabs
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key === "activeStoreId") setActiveStoreId(String(e.newValue ?? ""));
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  // Load user + normalize active store selection
   useEffect(() => {
     (async () => {
       try {
         const res = await fetch("/api/me", { credentials: "include" });
+
+        // logged out / forbidden
+        if (res.status === 401 || res.status === 403) {
+          if (typeof window !== "undefined") window.location.href = "/login";
+          return;
+        }
+
         const data = await res.json().catch(() => ({}));
         const user: Me | null = data.user ?? null;
         setMe(user);
@@ -34,32 +69,61 @@ export default function TopBar() {
         if (typeof window === "undefined") return;
 
         const saved = localStorage.getItem("activeStoreId");
+        const allStores = user?.stores ?? [];
+        const activeStores = allStores.filter((s) => s?.isActive !== false);
 
-        if (user?.stores?.length) {
-          // Default selection
+        if (activeStores.length) {
           if (!saved) {
-            const def = user.role === "SHOP_OWNER" ? "all" : user.stores[0].id;
+            const def = user?.role === "SHOP_OWNER" ? "all" : activeStores[0].id;
             localStorage.setItem("activeStoreId", def);
             setActiveStoreId(def);
-          } else {
-            // Non-owners cannot stay on "all"
-            if (saved === "all" && user.role !== "SHOP_OWNER") {
-              const def = user.stores[0].id;
+            return;
+          }
+
+          // Non-owners cannot stay on "all"
+          if (saved === "all" && user?.role !== "SHOP_OWNER") {
+            const def = activeStores[0].id;
+            localStorage.setItem("activeStoreId", def);
+            setActiveStoreId(def);
+            return;
+          }
+
+          // If saved store is no longer active, fall back
+          if (saved !== "all") {
+            const stillValid = activeStores.some((s) => s.id === saved);
+            if (!stillValid) {
+              const def = user?.role === "SHOP_OWNER" ? "all" : activeStores[0].id;
               localStorage.setItem("activeStoreId", def);
               setActiveStoreId(def);
-            } else {
-              setActiveStoreId(saved);
+              return;
             }
           }
-        } else {
-          // No stores yet
-          setActiveStoreId(saved ?? "");
+
+          setActiveStoreId(saved);
+          return;
         }
+
+        setActiveStoreId(saved ?? "");
       } catch {
         setMe(null);
       }
     })();
   }, []);
+
+  const activeStores = useMemo(() => {
+    return (me?.stores ?? []).filter((s) => s?.isActive !== false);
+  }, [me?.stores]);
+
+  const activeStoreLabel = useMemo(() => {
+    if (!activeStores.length) return "";
+    if (activeStoreId === "all") return "All Stores";
+    const s = activeStores.find((x) => x.id === activeStoreId);
+    if (!s) return "";
+    return s.city ? `${s.name} • ${s.city}` : s.name;
+  }, [activeStores, activeStoreId]);
+
+  const tenantName = me?.tenant?.name ?? "";
+  const title = useMemo(() => pageTitleFromPath(pathname), [pathname]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
@@ -67,83 +131,92 @@ export default function TopBar() {
     router.refresh();
   }
 
-  const activeStoreLabel = useMemo(() => {
-    if (!me?.stores?.length) return "";
-    if (activeStoreId === "all") return "All Stores";
-    const s = me.stores.find((x) => x.id === activeStoreId);
-    return s?.name ?? "";
-  }, [me?.stores, activeStoreId]);
-
-  // Hide on login-ish routes
-  if (pathname.startsWith("/login") || pathname.startsWith("/change-password")) return null;
   // Hide when not logged in
   if (me === null) return null;
 
   return (
-    <header className="md:hidden sticky top-0 z-40 border-b bg-white/90 backdrop-blur">
-      {/* Row 1: Brand + Logout */}
-      <div className="px-3 pt-3 flex items-center justify-between gap-3">
-        <Link href="/dashboard" className="font-semibold text-sm">
-          Aksha
-        </Link>
+    <header
+      className={cls(
+        "md:hidden sticky top-0 z-40 border-b",
+        "bg-white/85 backdrop-blur"
+      )}
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+    >
+      <div className="px-3 pt-3 pb-3">
+        {/* Row 1: Title + Role + Logout */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="text-base font-semibold tracking-tight truncate">{title}</div>
+              {me?.role ? <span className="badge">{me.role}</span> : null}
+            </div>
 
-        <button
-          className="text-xs border rounded-lg px-2 py-1 active:scale-[0.98]"
-          onClick={logout}
-        >
-          Logout
-        </button>
-      </div>
+            <div className="mt-1 text-[11px] subtle truncate">
+              <Link href="/dashboard" className="font-medium">
+                Aksha
+              </Link>
 
-      {/* Row 2: Store Switcher (full width to avoid overlap) */}
-      <div className="px-3 pt-2 pb-3">
-        {me?.stores?.length ? (
-          <div className="flex items-center gap-2">
-            <select
-              className="w-full border rounded-lg px-2 py-2 text-xs"
-              value={activeStoreId ?? ""}
-              onChange={(e) => {
-                const v = e.target.value;
+              {tenantName ? <span className="muted"> • </span> : null}
+              {tenantName ? <span className="muted">{tenantName}</span> : null}
 
-                // Only SHOP_OWNER can pick "all"
-                if (v === "all" && !isOwner) return;
-
-                localStorage.setItem("activeStoreId", v);
-                setActiveStoreId(v);
-                router.refresh();
-              }}
-            >
-              {isOwner && <option value="all">All Stores</option>}
-
-              {me.stores.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-
-            {isOwner && activeStoreId === "all" ? (
-              <span className="shrink-0 text-[10px] px-2 py-1 rounded-full bg-gray-100 text-gray-700">
-                Consolidated
-              </span>
-            ) : null}
+              {activeStoreLabel ? <span className="muted"> • </span> : null}
+              {activeStoreLabel ? <span className="muted">{activeStoreLabel}</span> : null}
+            </div>
           </div>
-        ) : (
-          <div className="text-xs text-gray-500">Loading…</div>
-        )}
 
-        {/* Row 3: Tenant + Role + Store label (single line, truncates safely) */}
-        {me?.tenant?.name ? (
-          <div className="mt-2 text-[11px] text-gray-500 flex items-center justify-between gap-2">
-            <span className="truncate">
-              {me.tenant.name} • {me.role}
-            </span>
+          {/* Icon-only on mobile keeps it SaaS-clean */}
+          <button
+            className="btn btn-ghost btn-icon shrink-0"
+            onClick={logout}
+            title="Logout"
+            type="button"
+            aria-label="Logout"
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
 
-            {activeStoreLabel ? (
-              <span className="truncate max-w-[45%]">Store: {activeStoreLabel}</span>
-            ) : null}
-          </div>
-        ) : null}
+        {/* Row 2: Store Switcher */}
+        <div className="mt-3">
+          {me === undefined ? (
+            <div className="h-10 w-full rounded-xl bg-gray-100 animate-pulse" />
+          ) : activeStores.length ? (
+            <div className="flex items-center gap-2">
+              <div className="relative w-full">
+                <select
+                  className="input appearance-none pr-10"
+                  value={activeStoreId ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "all" && !isOwner) return;
+
+                    localStorage.setItem("activeStoreId", v);
+                    setActiveStoreId(v);
+                    router.refresh();
+                  }}
+                >
+                  {isOwner && <option value="all">All Stores (Consolidated)</option>}
+                  {activeStores.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                      {s.city ? ` (${s.city})` : ""}
+                    </option>
+                  ))}
+                </select>
+
+                <ChevronsUpDown
+                  size={16}
+                  className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2"
+                  style={{ color: "rgb(var(--fg-muted))" }}
+                />
+              </div>
+
+              {isOwner && activeStoreId === "all" ? <span className="badge">Consolidated</span> : null}
+            </div>
+          ) : (
+            <div className="text-xs subtle">No active stores…</div>
+          )}
+        </div>
       </div>
     </header>
   );

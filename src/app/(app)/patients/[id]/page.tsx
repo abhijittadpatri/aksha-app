@@ -6,17 +6,10 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 
 /**
- * Patient Detail Page (final consolidated version)
- * - Keeps 4 tabs (Overview / Prescriptions / Orders / Invoices)
- * - Orders tab now supports:
- *    - Generate Invoice (existing)
- *    - Record Payment (for the linked invoice) via /api/invoices/[id] PATCH
- *    - Mark Ready / Mark Delivered via /api/orders/[id]/status PATCH
- *
- * NOTE:
- * - Operational status lives on Order (Ready/Delivered).
- * - Payment status lives on Invoice (Unpaid/Partial/Paid).
- * - We DO NOT change schema; we only call existing endpoints.
+ * Patient Detail Page (Dark SaaS)
+ * - Uses system tokens from globals.css (dark default + purple accent)
+ * - Avoids hardcoded gray/white Tailwind colors for better theme consistency
+ * - Keeps all logic/endpoints unchanged
  */
 
 type Patient = {
@@ -57,21 +50,19 @@ function safeDate(d: any) {
   }
 }
 
-function statusPill(kind: "ok" | "warn" | "muted", text: string) {
-  const c =
+function statusBadge(kind: "ok" | "warn" | "danger" | "muted", text: string) {
+  const k =
     kind === "ok"
-      ? "bg-green-50 text-green-900 border-green-200"
+      ? "badge badge-ok"
       : kind === "warn"
-      ? "bg-yellow-50 text-yellow-900 border-yellow-200"
-      : "bg-gray-50 text-gray-900 border-gray-200";
-  return (
-    <span className={cls("inline-flex text-[12px] px-2 py-1 rounded-full border", c)}>
-      {text}
-    </span>
-  );
+      ? "badge badge-warn"
+      : kind === "danger"
+      ? "badge badge-danger"
+      : "badge";
+  return <span className={k}>{text}</span>;
 }
 
-function TabButton({
+function SegTab({
   active,
   label,
   meta,
@@ -84,19 +75,29 @@ function TabButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cls(
-        "shrink-0 rounded-full px-3 py-2 text-sm border transition flex items-center gap-2",
-        active ? "bg-black text-white border-black" : "bg-white hover:bg-gray-50"
+        "shrink-0 inline-flex items-center gap-2 rounded-full px-3 py-2 text-sm transition",
+        "focus-visible:outline-none",
+        active
+          ? "bg-[rgba(var(--brand),0.16)] text-[rgb(var(--fg))] shadow-[0_10px_24px_rgba(var(--brand),0.12)]"
+          : "bg-[rgba(255,255,255,0.04)] text-[rgb(var(--fg-muted))] hover:bg-[rgba(255,255,255,0.07)] hover:text-[rgb(var(--fg))]"
       )}
+      style={{ border: "1px solid rgba(255,255,255,0.10)" }}
     >
-      <span>{label}</span>
+      <span className={cls(active ? "font-semibold" : "font-medium")}>{label}</span>
+
       {meta ? (
         <span
           className={cls(
             "text-[11px] px-2 py-[2px] rounded-full",
-            active ? "bg-white/20" : "bg-gray-100"
+            active ? "text-[rgb(var(--fg))]" : "text-[rgb(var(--fg-muted))]"
           )}
+          style={{
+            background: active ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.06)",
+            border: "1px solid rgba(255,255,255,0.10)",
+          }}
         >
           {meta}
         </span>
@@ -153,7 +154,7 @@ export default function PatientDetailPage() {
   const [invErr, setInvErr] = useState<string | null>(null);
   const [invActionLoading, setInvActionLoading] = useState<string | null>(null); // invoiceId or orderId while action runs
 
-  // ---- Payment modal (NEW)
+  // ---- Payment modal
   const [payOpen, setPayOpen] = useState(false);
   const [payInvoiceId, setPayInvoiceId] = useState<string>("");
   const [payTotal, setPayTotal] = useState<number>(0);
@@ -228,9 +229,7 @@ export default function PatientDetailPage() {
     const storeId = getActiveStoreId();
     const storeParam = storeId ? `&storeId=${encodeURIComponent(storeId)}` : "";
 
-    const res = await fetch(`/api/invoices?patientId=${patientId}${storeParam}`, {
-      credentials: "include",
-    });
+    const res = await fetch(`/api/invoices?patientId=${patientId}${storeParam}`, { credentials: "include" });
     const data = await safeJson(res);
 
     if (!res.ok) {
@@ -379,7 +378,6 @@ export default function PatientDetailPage() {
   function orderItemsFromForm() {
     const t = orderTotalsFromForm();
 
-    // ✅ Keep compatibility: invoice generator reads itemsJson.items
     const items = [
       { name: "Consultation Fee", qty: 1, rate: t.consult },
       { name: "Frames", qty: 1, rate: t.frames },
@@ -523,28 +521,6 @@ export default function PatientDetailPage() {
     return generateInvoiceForOrder(latestOrderId);
   }
 
-  async function updateInvoicePayment(invoiceId: string, amountPaid: number, paymentMode: string) {
-    if (!invoiceId) return;
-    setInvErr(null);
-    setInvActionLoading(invoiceId);
-    try {
-      const res = await fetch(`/api/invoices/${invoiceId}`, {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amountPaid, paymentMode }),
-      });
-      const data = await safeJson(res);
-      if (!res.ok) {
-        setInvErr(data.error ?? "Failed to update payment");
-        return;
-      }
-      await loadInvoices();
-    } finally {
-      setInvActionLoading(null);
-    }
-  }
-
   function invoiceTotal(inv: any) {
     const t = inv?.totalsJson?.total ?? inv?.total ?? 0;
     return safeNumber(t);
@@ -607,7 +583,6 @@ export default function PatientDetailPage() {
     }
   }
 
-  // invoice lookup per order (NEW, used in Orders tab)
   const invoiceByOrderId = useMemo(() => {
     const m = new Map<string, any>();
     (invoices ?? []).forEach((iv) => {
@@ -635,7 +610,7 @@ export default function PatientDetailPage() {
           latestRx && (latestRx.rxJson?.pd || latestRx.rxJson?.notes)
             ? `PD: ${fmt(latestRx.rxJson?.pd)} • ${fmt(latestRx.rxJson?.notes)}`
             : "Add a prescription to start.",
-        pill: latestRx ? statusPill("ok", "Ready") : statusPill("muted", "Missing"),
+        pill: latestRx ? statusBadge("ok", "Ready") : statusBadge("muted", "Missing"),
         action: () => {
           setTab("Prescriptions");
           setRxOpen(true);
@@ -646,7 +621,7 @@ export default function PatientDetailPage() {
         title: "Latest Order",
         value: oDate || "No order yet",
         sub: oc ? `Total ₹${money(oc.total)} • Balance ₹${money(oc.balance)}` : "Create an order (walk-in supported).",
-        pill: latestOrder ? statusPill("ok", latestOrder.status ?? "Draft") : statusPill("muted", "Missing"),
+        pill: latestOrder ? statusBadge("ok", String(latestOrder.status ?? "Draft")) : statusBadge("muted", "Missing"),
         action: () => {
           setTab("Orders");
           setOrderOpen(true);
@@ -659,11 +634,11 @@ export default function PatientDetailPage() {
         sub: latestInvoice ? `₹${money(invTotal)} • ${invDate}` : "Generate invoice from an order.",
         pill: latestInvoice
           ? invPS === "Paid"
-            ? statusPill("ok", "Paid")
+            ? statusBadge("ok", "Paid")
             : invPS === "Partial"
-            ? statusPill("warn", "Partial")
-            : statusPill("warn", "Unpaid")
-          : statusPill("muted", "Missing"),
+            ? statusBadge("warn", "Partial")
+            : statusBadge("warn", "Unpaid")
+          : statusBadge("muted", "Missing"),
         action: () => {
           if (latestInvoice?.id) window.location.href = `/invoices/${latestInvoice.id}`;
           else generateInvoiceFromLatestOrder();
@@ -685,7 +660,7 @@ export default function PatientDetailPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="min-w-0">
-            <Link href="/patients" className="text-sm underline">
+            <Link href="/patients" className="link text-sm">
               ← Back to Patients
             </Link>
 
@@ -694,12 +669,13 @@ export default function PatientDetailPage() {
           </div>
 
           <div className="flex gap-2 w-full md:w-auto">
-            <button className="btn btn-ghost border w-full md:w-auto" onClick={loadAll} disabled={loadingAll}>
+            <button className="btn btn-secondary w-full md:w-auto" onClick={loadAll} disabled={loadingAll} type="button">
               {loadingAll ? "Refreshing…" : "Refresh"}
             </button>
 
             <button
               className="btn btn-primary w-full md:w-auto"
+              type="button"
               onClick={() => {
                 setTab("Prescriptions");
                 setRxOpen(true);
@@ -710,20 +686,20 @@ export default function PatientDetailPage() {
           </div>
         </div>
 
-        {err && <div className="text-sm text-red-600">{err}</div>}
+        {err && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{err}</div>}
 
         {/* Tabs */}
         <div className="card card-pad">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-            <TabButton active={tab === "Overview"} label="Overview" onClick={() => setTab("Overview")} />
-            <TabButton
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+            <SegTab active={tab === "Overview"} label="Overview" onClick={() => setTab("Overview")} />
+            <SegTab
               active={tab === "Prescriptions"}
               label="Prescriptions"
               meta={tabMeta.Prescriptions}
               onClick={() => setTab("Prescriptions")}
             />
-            <TabButton active={tab === "Orders"} label="Orders" meta={tabMeta.Orders} onClick={() => setTab("Orders")} />
-            <TabButton
+            <SegTab active={tab === "Orders"} label="Orders" meta={tabMeta.Orders} onClick={() => setTab("Orders")} />
+            <SegTab
               active={tab === "Invoices"}
               label="Invoices"
               meta={tabMeta.Invoices}
@@ -737,32 +713,34 @@ export default function PatientDetailPage() {
           {/* ================= OVERVIEW ================= */}
           {tab === "Overview" && (
             <div className="space-y-4">
-              {/* Patient quick info */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="border rounded-2xl p-4">
-                  <div className="text-xs text-gray-500">Mobile</div>
+                <div className="panel p-4">
+                  <div className="label">Mobile</div>
                   <div className="mt-1 text-lg font-semibold truncate">{patient?.mobile ?? "—"}</div>
-                  <div className="mt-2 text-xs text-gray-500 truncate">{patient?.address ?? "—"}</div>
+                  <div className="mt-2 text-xs muted truncate">{patient?.address ?? "—"}</div>
                 </div>
 
-                <div className="border rounded-2xl p-4">
-                  <div className="text-xs text-gray-500">Age / Gender</div>
+                <div className="panel p-4">
+                  <div className="label">Age / Gender</div>
                   <div className="mt-1 text-lg font-semibold">
                     {patient?.age ? `${patient.age} yrs` : "—"}{" "}
-                    <span className="text-gray-500 font-normal">{patient?.gender ? `• ${patient.gender}` : ""}</span>
+                    <span style={{ color: "rgb(var(--fg-muted))", fontWeight: 400 }}>
+                      {patient?.gender ? `• ${patient.gender}` : ""}
+                    </span>
                   </div>
-                  <div className="mt-2 text-xs text-gray-500">
-                    Patient ID: {patient?.id ? String(patient.id).slice(-8) : "—"}
-                  </div>
+                  <div className="mt-2 text-xs muted">Patient ID: {patient?.id ? String(patient.id).slice(-8) : "—"}</div>
                 </div>
 
-                <div className="border rounded-2xl p-4">
-                  <div className="text-xs text-gray-500">Recommended flow</div>
-                  <div className="mt-1 text-sm text-gray-700">Prescription → Order → Invoice → Payment → Delivery</div>
+                <div className="panel p-4">
+                  <div className="label">Recommended flow</div>
+                  <div className="mt-1 text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
+                    Prescription → Order → Invoice → Payment → Delivery
+                  </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <button
-                      className="btn btn-ghost border"
+                      className="btn btn-secondary btn-sm"
+                      type="button"
                       onClick={() => {
                         setTab("Orders");
                         setOrderOpen(true);
@@ -770,34 +748,33 @@ export default function PatientDetailPage() {
                     >
                       + Order
                     </button>
-                    <button className="btn btn-primary" onClick={generateInvoiceFromLatestOrder}>
+                    <button className="btn btn-primary btn-sm" type="button" onClick={generateInvoiceFromLatestOrder}>
                       + Invoice
                     </button>
                   </div>
 
-                  <div className="mt-2 text-[11px] text-gray-500">
-                    Walk-in sale supported: you can create an order even without Rx.
-                  </div>
+                  <div className="mt-2 text-[11px] muted">Walk-in supported: you can create an order even without Rx.</div>
                 </div>
               </div>
 
-              {/* At-a-glance cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 {(["rx", "order", "invoice"] as const).map((k) => {
                   const c = overview[k];
                   return (
-                    <div key={k} className="border rounded-2xl p-4 space-y-2">
+                    <div key={k} className="panel p-4 space-y-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="text-sm font-semibold truncate">{c.title}</div>
-                          <div className="text-xs text-gray-500 truncate">{c.value}</div>
+                          <div className="text-xs muted truncate">{c.value}</div>
                         </div>
                         <div className="shrink-0">{c.pill}</div>
                       </div>
 
-                      <div className="text-sm text-gray-700">{c.sub}</div>
+                      <div className="text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
+                        {c.sub}
+                      </div>
 
-                      <button className="btn btn-ghost border w-full" onClick={c.action}>
+                      <button className="btn btn-secondary w-full" type="button" onClick={c.action}>
                         {c.actionLabel}
                       </button>
                     </div>
@@ -805,12 +782,12 @@ export default function PatientDetailPage() {
                 })}
               </div>
 
-              {/* Latest quick actions */}
-              <div className="border rounded-2xl p-4">
+              <div className="panel p-4">
                 <div className="text-sm font-semibold">Quick actions</div>
                 <div className="mt-2 flex flex-col md:flex-row gap-2">
                   <button
                     className="btn btn-primary"
+                    type="button"
                     onClick={() => {
                       setTab("Prescriptions");
                       setRxOpen(true);
@@ -820,7 +797,8 @@ export default function PatientDetailPage() {
                   </button>
 
                   <button
-                    className="btn btn-ghost border"
+                    className="btn btn-secondary"
+                    type="button"
                     onClick={() => {
                       setTab("Orders");
                       setOrderOpen(true);
@@ -829,26 +807,28 @@ export default function PatientDetailPage() {
                     Create Order
                   </button>
 
-                  <button className="btn btn-ghost border" onClick={generateInvoiceFromLatestOrder}>
+                  <button className="btn btn-outline" type="button" onClick={generateInvoiceFromLatestOrder}>
                     Generate Invoice (Latest Order)
                   </button>
                 </div>
 
                 {latestOrder?.id ? (
                   <div className="mt-3 flex flex-col md:flex-row md:items-center gap-2">
-                    <div className="text-sm text-gray-700">
-                      Latest order status: <span className="font-medium">{fmt(latestOrder.status ?? "Draft")}</span>
+                    <div className="text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
+                      Latest order status: <span style={{ color: "rgb(var(--fg))", fontWeight: 600 }}>{fmt(latestOrder.status ?? "Draft")}</span>
                     </div>
                     <div className="flex gap-2">
                       <button
-                        className="btn btn-ghost border"
+                        className="btn btn-secondary btn-sm"
+                        type="button"
                         disabled={invActionLoading === latestOrder.id}
                         onClick={() => updateOrderStatus(latestOrder.id, "Ready")}
                       >
                         Mark Ready
                       </button>
                       <button
-                        className="btn btn-ghost border"
+                        className="btn btn-secondary btn-sm"
+                        type="button"
                         disabled={invActionLoading === latestOrder.id}
                         onClick={() => updateOrderStatus(latestOrder.id, "Delivered")}
                       >
@@ -868,30 +848,30 @@ export default function PatientDetailPage() {
                 <div className="h2">Prescriptions</div>
 
                 <div className="grid grid-cols-2 gap-2 md:flex md:justify-end">
-                  <button className="btn btn-ghost border" onClick={loadPrescriptions}>
+                  <button className="btn btn-secondary" type="button" onClick={loadPrescriptions}>
                     Refresh
                   </button>
-                  <button className="btn btn-primary" onClick={() => setRxOpen(true)}>
+                  <button className="btn btn-primary" type="button" onClick={() => setRxOpen(true)}>
                     + Add Rx
                   </button>
                 </div>
               </div>
 
-              {rxErr && <div className="text-sm text-red-600">{rxErr}</div>}
+              {rxErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{rxErr}</div>}
 
               <div className="space-y-3">
                 {prescriptions.map((rx) => (
-                  <div key={rx.id} className="border rounded-2xl p-3">
+                  <div key={rx.id} className="panel p-4 space-y-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-sm font-medium">Prescription</div>
-                        <div className="text-xs text-gray-600 truncate">{safeDate(rx.createdAt)}</div>
+                        <div className="text-sm font-semibold">Prescription</div>
+                        <div className="text-xs muted truncate">{safeDate(rx.createdAt)}</div>
                       </div>
                       <span className="badge shrink-0">Rx</span>
                     </div>
 
-                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="border rounded-xl p-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="surface-muted p-3">
                         <div className="font-medium text-sm mb-2">Right (OD)</div>
                         <div className="text-sm">Sphere: {fmt(rx.rxJson?.right?.sphere)}</div>
                         <div className="text-sm">Cyl: {fmt(rx.rxJson?.right?.cyl)}</div>
@@ -899,7 +879,7 @@ export default function PatientDetailPage() {
                         <div className="text-sm">Add: {fmt(rx.rxJson?.right?.add)}</div>
                       </div>
 
-                      <div className="border rounded-xl p-3">
+                      <div className="surface-muted p-3">
                         <div className="font-medium text-sm mb-2">Left (OS)</div>
                         <div className="text-sm">Sphere: {fmt(rx.rxJson?.left?.sphere)}</div>
                         <div className="text-sm">Cyl: {fmt(rx.rxJson?.left?.cyl)}</div>
@@ -908,16 +888,14 @@ export default function PatientDetailPage() {
                       </div>
                     </div>
 
-                    <div className="mt-2 text-sm">
-                      <span className="font-medium">PD:</span> {fmt(rx.rxJson?.pd)}{" "}
-                      <span className="font-medium">• Notes:</span> {fmt(rx.rxJson?.notes)}
+                    <div className="text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
+                      <span style={{ color: "rgb(var(--fg))", fontWeight: 600 }}>PD:</span> {fmt(rx.rxJson?.pd)}{" "}
+                      <span style={{ color: "rgb(var(--fg))", fontWeight: 600 }}>• Notes:</span> {fmt(rx.rxJson?.notes)}
                     </div>
                   </div>
                 ))}
 
-                {prescriptions.length === 0 && (
-                  <div className="p-4 text-sm text-gray-500 border rounded-2xl">No prescriptions yet.</div>
-                )}
+                {prescriptions.length === 0 && <div className="panel p-4 text-sm muted">No prescriptions yet.</div>}
               </div>
             </div>
           )}
@@ -929,17 +907,17 @@ export default function PatientDetailPage() {
                 <div className="h2">Orders</div>
 
                 <div className="grid grid-cols-2 gap-2 md:flex md:justify-end">
-                  <button className="btn btn-primary" onClick={() => setOrderOpen(true)}>
+                  <button className="btn btn-primary" type="button" onClick={() => setOrderOpen(true)}>
                     + Create Order
                   </button>
-                  <button className="btn btn-ghost border" onClick={loadOrders}>
+                  <button className="btn btn-secondary" type="button" onClick={loadOrders}>
                     Refresh
                   </button>
                 </div>
               </div>
 
-              {orderErr && <div className="text-sm text-red-600">{orderErr}</div>}
-              {invErr && <div className="text-sm text-red-600">{invErr}</div>}
+              {orderErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{orderErr}</div>}
+              {invErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{invErr}</div>}
 
               <div className="space-y-3">
                 {orders.map((o) => {
@@ -950,7 +928,6 @@ export default function PatientDetailPage() {
                   const invPS = inv ? invoicePaymentStatus(inv) : null;
                   const invTotal = inv ? invoiceTotal(inv) : 0;
 
-                  // ✅ NEW: display balance based on invoice payment status
                   let displayBalance = oc.balance;
                   if (inv) {
                     const paidAmt = invoiceAmountPaid(inv);
@@ -959,70 +936,73 @@ export default function PatientDetailPage() {
 
                     if (ps === "Paid") displayBalance = 0;
                     else if (ps === "Partial") displayBalance = Math.max(0, totalAmt - paidAmt);
-                    // Unpaid -> keep oc.balance (advance-based)
                   }
 
                   return (
-                    <div key={o.id} className="border rounded-2xl p-3 space-y-3">
+                    <div key={o.id} className="panel p-4 space-y-3">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <div className="text-sm font-medium">Order</div>
-                            {o.status ? statusPill("muted", String(o.status)) : null}
-                            {billed ? statusPill("ok", "Billed") : statusPill("warn", "Unbilled")}
+                            <div className="text-sm font-semibold">Order</div>
+
+                            {o.status ? <span className="badge">{String(o.status)}</span> : null}
+                            {billed ? statusBadge("ok", "Billed") : statusBadge("warn", "Unbilled")}
+
                             {invPS ? (
                               invPS === "Paid" ? (
-                                statusPill("ok", "Paid")
+                                statusBadge("ok", "Paid")
                               ) : invPS === "Partial" ? (
-                                statusPill("warn", "Partial")
+                                statusBadge("warn", "Partial")
                               ) : (
-                                statusPill("warn", "Unpaid")
+                                statusBadge("warn", "Unpaid")
                               )
                             ) : (
-                              <span className="text-xs text-gray-500">No invoice</span>
+                              <span className="text-xs muted">No invoice</span>
                             )}
                           </div>
 
-                          <div className="text-xs text-gray-600 truncate">
+                          <div className="text-xs muted truncate">
                             {safeDate(o.createdAt)} • Total ₹{money(oc.total)} • Balance ₹{money(displayBalance)}
                           </div>
 
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs muted">
                             Order ID: {String(o.id).slice(-6)} • Linked Rx: {o.prescriptionId ?? "—"}
                           </div>
 
                           {inv?.invoiceNo ? (
-                            <div className="text-xs text-gray-500 mt-1">
-                              Invoice: <span className="font-medium">{inv.invoiceNo}</span> • ₹{money(invTotal)}
+                            <div className="text-xs muted mt-1">
+                              Invoice: <span style={{ color: "rgb(var(--fg))", fontWeight: 600 }}>{inv.invoiceNo}</span> • ₹{money(invTotal)}
                             </div>
                           ) : null}
                         </div>
 
                         <div className="flex items-center gap-2 justify-end flex-wrap">
                           {!billed ? (
-                            <button className="btn btn-ghost border" onClick={() => generateInvoiceForOrder(o.id)}>
+                            <button className="btn btn-outline btn-sm" type="button" onClick={() => generateInvoiceForOrder(o.id)}>
                               Generate Invoice
                             </button>
                           ) : inv?.id ? (
                             <>
                               <button
-                                className="btn btn-ghost border"
+                                className="btn btn-secondary btn-sm"
+                                type="button"
                                 onClick={() => (window.location.href = `/invoices/${inv.id}`)}
                               >
                                 Open Invoice
                               </button>
-                              <button className="btn btn-primary" onClick={() => openPaymentModal(inv)}>
+                              <button className="btn btn-primary btn-sm" type="button" onClick={() => openPaymentModal(inv)}>
                                 Record Payment
                               </button>
                             </>
                           ) : (
-                            <button className="btn btn-ghost border" onClick={loadInvoices}>
+                            <button className="btn btn-secondary btn-sm" type="button" onClick={loadInvoices}>
                               Refresh Invoice
                             </button>
                           )}
 
                           <button
-                            className="btn btn-ghost border"
+                            className="btn btn-secondary btn-sm"
+                            type="button"
                             disabled={invActionLoading === o.id}
                             onClick={() => updateOrderStatus(o.id, "Ready")}
                             title="Operational status"
@@ -1031,7 +1011,8 @@ export default function PatientDetailPage() {
                           </button>
 
                           <button
-                            className="btn btn-ghost border"
+                            className="btn btn-secondary btn-sm"
+                            type="button"
                             disabled={invActionLoading === o.id}
                             onClick={() => updateOrderStatus(o.id, "Delivered")}
                             title="Operational status"
@@ -1041,45 +1022,35 @@ export default function PatientDetailPage() {
                         </div>
                       </div>
 
-                      {/* Breakdown */}
                       <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-sm">
-                        <div className="border rounded-xl p-2">
-                          <div className="text-xs text-gray-500">Consult</div>
-                          <div className="font-semibold">₹{money(oc.breakdown?.consultationFee ?? 0)}</div>
-                        </div>
-                        <div className="border rounded-xl p-2">
-                          <div className="text-xs text-gray-500">Frames</div>
-                          <div className="font-semibold">₹{money(oc.breakdown?.frames ?? 0)}</div>
-                        </div>
-                        <div className="border rounded-xl p-2">
-                          <div className="text-xs text-gray-500">Spectacles</div>
-                          <div className="font-semibold">₹{money(oc.breakdown?.spectacles ?? 0)}</div>
-                        </div>
-                        <div className="border rounded-xl p-2">
-                          <div className="text-xs text-gray-500">Discount</div>
-                          <div className="font-semibold">₹{money(oc.disc)}</div>
-                        </div>
-                        <div className="border rounded-xl p-2">
-                          <div className="text-xs text-gray-500">Advance</div>
-                          <div className="font-semibold">₹{money(oc.adv)}</div>
-                        </div>
-                        <div className="border rounded-xl p-2">
-                          <div className="text-xs text-gray-500">Balance</div>
-                          <div className="font-semibold">₹{money(displayBalance)}</div>
-                        </div>
+                        {[
+                          { label: "Consult", value: `₹${money(oc.breakdown?.consultationFee ?? 0)}` },
+                          { label: "Frames", value: `₹${money(oc.breakdown?.frames ?? 0)}` },
+                          { label: "Spectacles", value: `₹${money(oc.breakdown?.spectacles ?? 0)}` },
+                          { label: "Discount", value: `₹${money(oc.disc)}` },
+                          { label: "Advance", value: `₹${money(oc.adv)}` },
+                          { label: "Balance", value: `₹${money(displayBalance)}` },
+                        ].map((b) => (
+                          <div key={b.label} className="surface-muted p-2">
+                            <div className="text-xs muted">{b.label}</div>
+                            <div className="font-semibold">{b.value}</div>
+                          </div>
+                        ))}
                       </div>
 
                       {oc.breakdown?.notes ? (
-                        <div className="text-sm text-gray-700 border rounded-xl p-2">
-                          <div className="text-xs text-gray-500 mb-1">Notes</div>
-                          {String(oc.breakdown.notes)}
+                        <div className="surface-muted p-3">
+                          <div className="text-xs muted mb-1">Notes</div>
+                          <div className="text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
+                            {String(oc.breakdown.notes)}
+                          </div>
                         </div>
                       ) : null}
                     </div>
                   );
                 })}
 
-                {orders.length === 0 && <div className="p-4 text-sm text-gray-500 border rounded-2xl">No orders yet.</div>}
+                {orders.length === 0 && <div className="panel p-4 text-sm muted">No orders yet.</div>}
               </div>
             </div>
           )}
@@ -1091,16 +1062,16 @@ export default function PatientDetailPage() {
                 <div className="h2">Invoices</div>
 
                 <div className="grid grid-cols-2 gap-2 md:flex md:justify-end">
-                  <button className="btn btn-primary" onClick={generateInvoiceFromLatestOrder}>
+                  <button className="btn btn-primary" type="button" onClick={generateInvoiceFromLatestOrder}>
                     Generate (Latest Order)
                   </button>
-                  <button className="btn btn-ghost border" onClick={loadInvoices}>
+                  <button className="btn btn-secondary" type="button" onClick={loadInvoices}>
                     Refresh
                   </button>
                 </div>
               </div>
 
-              {invErr && <div className="text-sm text-red-600">{invErr}</div>}
+              {invErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{invErr}</div>}
 
               <div className="space-y-2">
                 {invoices.map((inv) => {
@@ -1110,38 +1081,36 @@ export default function PatientDetailPage() {
                   const orderId = inv?.orderId ?? "";
 
                   return (
-                    <div key={inv.id} className="border rounded-2xl p-3 space-y-2">
+                    <div key={inv.id} className="panel p-4 space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <div className="text-sm font-medium truncate">{inv.invoiceNo ?? "Invoice"}</div>
+                            <div className="text-sm font-semibold truncate">{inv.invoiceNo ?? "Invoice"}</div>
                             {ps === "Paid"
-                              ? statusPill("ok", "Paid")
+                              ? statusBadge("ok", "Paid")
                               : ps === "Partial"
-                              ? statusPill("warn", "Partial")
-                              : statusPill("warn", "Unpaid")}
+                              ? statusBadge("warn", "Partial")
+                              : statusBadge("warn", "Unpaid")}
                           </div>
-                          <div className="text-xs text-gray-600 truncate">
+                          <div className="text-xs muted truncate">
                             {safeDate(inv.createdAt)} • Total ₹{money(total)} • Mode: {paymentMode}
                           </div>
-                          <div className="text-xs text-gray-500 truncate">
-                            Order: {orderId ? String(orderId).slice(-6) : "—"}
-                          </div>
+                          <div className="text-xs muted truncate">Order: {orderId ? String(orderId).slice(-6) : "—"}</div>
                         </div>
 
-                        <a className="btn btn-ghost border shrink-0" href={`/invoices/${inv.id}`}>
+                        <a className="btn btn-secondary btn-sm shrink-0" href={`/invoices/${inv.id}`}>
                           Open
                         </a>
                       </div>
 
-                      {/* Quick actions */}
                       <div className="flex flex-col md:flex-row gap-2">
-                        <button className="btn btn-primary" onClick={() => openPaymentModal(inv)}>
+                        <button className="btn btn-primary" type="button" onClick={() => openPaymentModal(inv)}>
                           Record Payment
                         </button>
 
                         <button
-                          className="btn btn-ghost border"
+                          className="btn btn-secondary"
+                          type="button"
                           disabled={!orderId || invActionLoading === orderId}
                           onClick={() => updateOrderStatus(orderId, "Delivered")}
                           title={!orderId ? "No order linked" : "Updates order status to Delivered"}
@@ -1153,7 +1122,7 @@ export default function PatientDetailPage() {
                   );
                 })}
 
-                {invoices.length === 0 && <div className="p-4 text-sm text-gray-500 border rounded-2xl">No invoices yet.</div>}
+                {invoices.length === 0 && <div className="panel p-4 text-sm muted">No invoices yet.</div>}
               </div>
             </div>
           )}
@@ -1161,16 +1130,17 @@ export default function PatientDetailPage() {
 
         {/* ================= Rx Modal ================= */}
         {rxOpen && (
-          <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-            <div className="bg-white w-full max-w-3xl rounded-2xl p-4 shadow max-h-[85vh] overflow-auto space-y-4">
-              <div className="flex justify-between items-center sticky top-0 bg-white pb-2">
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+            <div className="card w-full max-w-3xl card-pad max-h-[85vh] overflow-auto space-y-4">
+              <div className="flex justify-between items-center sticky top-0 pb-2" style={{ background: "rgb(var(--panel))" }}>
                 <div>
                   <h2 className="text-lg font-semibold">New Prescription</h2>
-                  <div className="text-xs text-gray-500">Single form • OD & OS sections • Copy between eyes</div>
+                  <div className="text-xs muted">Single form • OD & OS sections • Copy between eyes</div>
                 </div>
 
                 <button
-                  className="text-sm underline"
+                  className="btn btn-ghost btn-sm"
+                  type="button"
                   onClick={() => {
                     if (rxSaving) return;
                     setRxOpen(false);
@@ -1181,14 +1151,13 @@ export default function PatientDetailPage() {
                 </button>
               </div>
 
-              {rxErr && <div className="text-sm text-red-600">{rxErr}</div>}
+              {rxErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{rxErr}</div>}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {/* Right */}
-                <div className="border rounded-2xl p-3 space-y-2">
+                <div className="panel p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="font-medium">Right Eye (OD)</div>
-                    <button className="btn btn-ghost border" type="button" onClick={copyRightToLeft}>
+                    <button className="btn btn-secondary btn-sm" type="button" onClick={copyRightToLeft}>
                       Copy → Left
                     </button>
                   </div>
@@ -1198,11 +1167,10 @@ export default function PatientDetailPage() {
                   <input className="input" placeholder="Add" value={rAdd} onChange={(e) => setRAdd(e.target.value)} />
                 </div>
 
-                {/* Left */}
-                <div className="border rounded-2xl p-3 space-y-2">
+                <div className="panel p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <div className="font-medium">Left Eye (OS)</div>
-                    <button className="btn btn-ghost border" type="button" onClick={copyLeftToRight}>
+                    <button className="btn btn-secondary btn-sm" type="button" onClick={copyLeftToRight}>
                       Copy → Right
                     </button>
                   </div>
@@ -1219,12 +1187,12 @@ export default function PatientDetailPage() {
               </div>
 
               <div className="flex flex-col md:flex-row gap-2">
-                <button className="btn btn-primary w-full disabled:opacity-60" onClick={createPrescription} disabled={rxSaving}>
+                <button className="btn btn-primary w-full" onClick={createPrescription} disabled={rxSaving} type="button">
                   {rxSaving ? "Saving..." : "Save Prescription"}
                 </button>
 
                 <button
-                  className="btn btn-ghost border w-full"
+                  className="btn btn-secondary w-full"
                   type="button"
                   onClick={() => {
                     if (rxSaving) return;
@@ -1236,23 +1204,24 @@ export default function PatientDetailPage() {
                 </button>
               </div>
 
-              <div className="text-xs text-gray-500">Tip: If both eyes are same, fill one side and use “Copy”.</div>
+              <div className="text-xs muted">Tip: If both eyes are same, fill one side and use “Copy”.</div>
             </div>
           </div>
         )}
 
         {/* ================= Order Modal ================= */}
         {orderOpen && (
-          <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-            <div className="bg-white w-full max-w-3xl rounded-2xl p-4 shadow max-h-[85vh] overflow-auto space-y-4">
-              <div className="flex justify-between items-center sticky top-0 bg-white pb-2">
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+            <div className="card w-full max-w-3xl card-pad max-h-[85vh] overflow-auto space-y-4">
+              <div className="flex justify-between items-center sticky top-0 pb-2" style={{ background: "rgb(var(--panel))" }}>
                 <div>
                   <h2 className="text-lg font-semibold">Create Order</h2>
-                  <div className="text-xs text-gray-500">Split amounts • Auto balance • Walk-in supported</div>
+                  <div className="text-xs muted">Split amounts • Auto balance • Walk-in supported</div>
                 </div>
 
                 <button
-                  className="text-sm underline"
+                  className="btn btn-ghost btn-sm"
+                  type="button"
                   onClick={() => {
                     if (orderSaving) return;
                     setOrderOpen(false);
@@ -1263,80 +1232,69 @@ export default function PatientDetailPage() {
                 </button>
               </div>
 
-              {orderErr && <div className="text-sm text-red-600">{orderErr}</div>}
+              {orderErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{orderErr}</div>}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <div className="text-xs text-gray-500 mb-1">Consultation Fee</div>
+                  <div className="label mb-1">Consultation Fee</div>
                   <input className="input" value={consultFee} onChange={(e) => setConsultFee(e.target.value)} placeholder="0" inputMode="decimal" />
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500 mb-1">Frames</div>
+                  <div className="label mb-1">Frames</div>
                   <input className="input" value={framesAmt} onChange={(e) => setFramesAmt(e.target.value)} placeholder="0" inputMode="decimal" />
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500 mb-1">Spectacles / Lenses</div>
+                  <div className="label mb-1">Spectacles / Lenses</div>
                   <input className="input" value={spectaclesAmt} onChange={(e) => setSpectaclesAmt(e.target.value)} placeholder="0" inputMode="decimal" />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <div className="text-xs text-gray-500 mb-1">Discount (Flat ₹)</div>
+                  <div className="label mb-1">Discount (Flat ₹)</div>
                   <input className="input" value={discountFlat} onChange={(e) => setDiscountFlat(e.target.value)} placeholder="0" inputMode="decimal" />
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500 mb-1">Discount (%)</div>
+                  <div className="label mb-1">Discount (%)</div>
                   <input className="input" value={discountPct} onChange={(e) => setDiscountPct(e.target.value)} placeholder="0" inputMode="decimal" />
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500 mb-1">Advance Paid</div>
+                  <div className="label mb-1">Advance Paid</div>
                   <input className="input" value={advancePaid} onChange={(e) => setAdvancePaid(e.target.value)} placeholder="0" inputMode="decimal" />
                 </div>
               </div>
 
               <div>
-                <div className="text-xs text-gray-500 mb-1">Notes</div>
+                <div className="label mb-1">Notes</div>
                 <input className="input" value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} placeholder="Optional" />
               </div>
 
-              <div className="border rounded-2xl p-3">
-                <div className="text-sm font-medium">Summary</div>
+              <div className="panel p-3">
+                <div className="text-sm font-semibold">Summary</div>
                 <div className="mt-2 grid grid-cols-2 md:grid-cols-6 gap-2 text-sm">
-                  <div className="border rounded-xl p-2">
-                    <div className="text-xs text-gray-500">Subtotal</div>
-                    <div className="font-semibold">₹{money(formTotals.subTotal)}</div>
-                  </div>
-                  <div className="border rounded-xl p-2">
-                    <div className="text-xs text-gray-500">Discount</div>
-                    <div className="font-semibold">₹{money(formTotals.disc)}</div>
-                  </div>
-                  <div className="border rounded-xl p-2">
-                    <div className="text-xs text-gray-500">Total</div>
-                    <div className="font-semibold">₹{money(formTotals.total)}</div>
-                  </div>
-                  <div className="border rounded-xl p-2">
-                    <div className="text-xs text-gray-500">Advance</div>
-                    <div className="font-semibold">₹{money(formTotals.adv)}</div>
-                  </div>
-                  <div className="border rounded-xl p-2">
-                    <div className="text-xs text-gray-500">Balance</div>
-                    <div className="font-semibold">₹{money(formTotals.balance)}</div>
-                  </div>
-                  <div className="border rounded-xl p-2">
-                    <div className="text-xs text-gray-500">Discount %</div>
-                    <div className="font-semibold">{money(formTotals.pct)}%</div>
-                  </div>
+                  {[
+                    { label: "Subtotal", value: `₹${money(formTotals.subTotal)}` },
+                    { label: "Discount", value: `₹${money(formTotals.disc)}` },
+                    { label: "Total", value: `₹${money(formTotals.total)}` },
+                    { label: "Advance", value: `₹${money(formTotals.adv)}` },
+                    { label: "Balance", value: `₹${money(formTotals.balance)}` },
+                    { label: "Discount %", value: `${money(formTotals.pct)}%` },
+                  ].map((x) => (
+                    <div key={x.label} className="surface-muted p-2">
+                      <div className="text-xs muted">{x.label}</div>
+                      <div className="font-semibold">{x.value}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
               <div className="flex flex-col md:flex-row gap-2">
-                <button className="btn btn-primary w-full disabled:opacity-60" onClick={createOrder} disabled={orderSaving}>
+                <button className="btn btn-primary w-full" onClick={createOrder} disabled={orderSaving} type="button">
                   {orderSaving ? "Saving..." : "Save Order (Draft)"}
                 </button>
 
                 <button
-                  className="btn btn-ghost border w-full"
+                  className="btn btn-secondary w-full"
                   type="button"
                   onClick={() => {
                     if (orderSaving) return;
@@ -1348,24 +1306,23 @@ export default function PatientDetailPage() {
                 </button>
               </div>
 
-              <div className="text-xs text-gray-500">Order links to the latest prescription automatically (if present).</div>
+              <div className="text-xs muted">Order links to the latest prescription automatically (if present).</div>
             </div>
           </div>
         )}
 
-        {/* ================= Payment Modal (NEW) ================= */}
+        {/* ================= Payment Modal ================= */}
         {payOpen && (
-          <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-            <div className="bg-white w-full max-w-lg rounded-2xl p-4 shadow space-y-4">
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+            <div className="card w-full max-w-lg card-pad space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-lg font-semibold">Record Payment</div>
-                  <div className="text-xs text-gray-500">
-                    Total ₹{money(payTotal)} • Update will set Paid/Partial/Unpaid on invoice
-                  </div>
+                  <div className="text-xs muted">Total ₹{money(payTotal)} • Updates invoice Paid/Partial/Unpaid</div>
                 </div>
                 <button
-                  className="text-sm underline"
+                  className="btn btn-ghost btn-sm"
+                  type="button"
                   onClick={() => {
                     if (paySaving) return;
                     setPayOpen(false);
@@ -1375,17 +1332,17 @@ export default function PatientDetailPage() {
                 </button>
               </div>
 
-              {payErr && <div className="text-sm text-red-600">{payErr}</div>}
+              {payErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{payErr}</div>}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <div className="text-xs text-gray-500 mb-1">Amount paid</div>
+                  <div className="label mb-1">Amount paid</div>
                   <input className="input" inputMode="decimal" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0" />
-                  <div className="text-[11px] text-gray-500 mt-1">Tip: For full payment, use “Mark paid (full)”.</div>
+                  <div className="text-[11px] muted mt-1">Tip: For full payment, use “Mark paid (full)”.</div>
                 </div>
 
                 <div>
-                  <div className="text-xs text-gray-500 mb-1">Payment mode</div>
+                  <div className="label mb-1">Payment mode</div>
                   <select className="input" value={payMode} onChange={(e) => setPayMode(e.target.value)}>
                     <option>Cash</option>
                     <option>UPI</option>
@@ -1396,21 +1353,16 @@ export default function PatientDetailPage() {
               </div>
 
               <div className="flex gap-2">
-                <button
-                  className="btn btn-ghost border w-full"
-                  type="button"
-                  onClick={() => setPayAmount(String(payTotal))}
-                  disabled={paySaving}
-                >
+                <button className="btn btn-secondary w-full" type="button" onClick={() => setPayAmount(String(payTotal))} disabled={paySaving}>
                   Mark paid (full)
                 </button>
 
-                <button className="btn btn-primary w-full disabled:opacity-60" onClick={submitPayment} disabled={paySaving}>
+                <button className="btn btn-primary w-full" type="button" onClick={submitPayment} disabled={paySaving}>
                   {paySaving ? "Saving…" : "Save payment"}
                 </button>
               </div>
 
-              <div className="text-xs text-gray-500">After saving, the Orders tab will show Paid/Partial/Unpaid for this order.</div>
+              <div className="text-xs muted">After saving, Orders will reflect Paid/Partial/Unpaid for this order.</div>
             </div>
           </div>
         )}
