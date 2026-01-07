@@ -1,10 +1,18 @@
-// src/components/shell/BottomNav.tsx
 "use client";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Home, Users, Receipt, BarChart3, Store, Settings, ChevronDown, X } from "lucide-react";
+import {
+  Home,
+  Users,
+  Receipt,
+  BarChart3,
+  Store,
+  Settings,
+  ChevronDown,
+  X,
+} from "lucide-react";
 
 type Me = {
   role: "ADMIN" | "SHOP_OWNER" | "DOCTOR" | "BILLING";
@@ -27,10 +35,10 @@ function isActivePath(pathname: string, href: string) {
 }
 
 /**
- * SaaS-standardized mobile bottom nav:
- * - Brand-accented active state (uses CSS tokens)
- * - Consistent button language via .btn for sheet actions
- * - Safer spacing for iOS safe area + better tap targets
+ * Dark SaaS mobile bottom nav:
+ * - Uses tokens (no white/gray hardcoding)
+ * - Brand-accented active state
+ * - More sheet uses modal-backdrop + modal styles from global.css
  */
 function Tab({
   href,
@@ -52,22 +60,27 @@ function Tab({
       aria-current={active ? "page" : undefined}
       className={cls(
         "flex flex-col items-center justify-center gap-1 py-2 select-none",
-        "text-[11px] leading-tight",
-        active ? "text-[rgb(var(--fg))]" : "text-[rgb(var(--fg-muted))]"
+        "text-[11px] leading-tight"
       )}
+      style={{
+        color: active ? "rgb(var(--fg))" : "rgb(var(--fg-muted))",
+      }}
     >
       <div
-        className={cls(
-          "h-9 w-14 rounded-2xl flex items-center justify-center transition border",
-          active
-            ? "bg-[rgba(var(--brand),0.10)] border-[rgba(var(--brand),0.25)]"
-            : "border-transparent"
-        )}
+        className="h-9 w-14 rounded-2xl flex items-center justify-center transition border"
+        style={{
+          background: active ? "rgba(var(--brand),0.10)" : "transparent",
+          borderColor: active ? "rgba(var(--brand),0.25)" : "transparent",
+        }}
       >
-        <span className={cls("transition", active ? "opacity-100" : "opacity-80")}>{icon}</span>
+        <span className={cls("transition", active ? "opacity-100" : "opacity-80")}>
+          {icon}
+        </span>
       </div>
 
-      <div className={cls("max-w-full truncate", active ? "font-semibold" : "font-medium")}>{label}</div>
+      <div className={cls("max-w-full truncate", active ? "font-semibold" : "font-medium")}>
+        {label}
+      </div>
     </Link>
   );
 }
@@ -100,12 +113,42 @@ export default function BottomNav() {
     const role = me?.role;
 
     const items: TabItem[] = [
-      { href: "/dashboard", label: "Home", icon: <Home size={18} />, roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"] },
-      { href: "/patients", label: "Patients", icon: <Users size={18} />, roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"] },
-      { href: "/invoices", label: "Invoices", icon: <Receipt size={18} />, roles: ["ADMIN", "SHOP_OWNER", "BILLING"] },
-      { href: "/insights", label: "Insights", icon: <BarChart3 size={18} />, roles: ["ADMIN", "SHOP_OWNER"] },
-      { href: "/stores", label: "Stores", icon: <Store size={18} />, roles: ["ADMIN", "SHOP_OWNER"] },
-      { href: "/users", label: "Users", icon: <Settings size={18} />, roles: ["ADMIN", "SHOP_OWNER"] },
+      {
+        href: "/dashboard",
+        label: "Home",
+        icon: <Home size={18} />,
+        roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"],
+      },
+      {
+        href: "/patients",
+        label: "Patients",
+        icon: <Users size={18} />,
+        roles: ["ADMIN", "SHOP_OWNER", "DOCTOR", "BILLING"],
+      },
+      {
+        href: "/invoices",
+        label: "Invoices",
+        icon: <Receipt size={18} />,
+        roles: ["ADMIN", "SHOP_OWNER", "BILLING"],
+      },
+      {
+        href: "/insights",
+        label: "Insights",
+        icon: <BarChart3 size={18} />,
+        roles: ["ADMIN", "SHOP_OWNER"],
+      },
+      {
+        href: "/stores",
+        label: "Stores",
+        icon: <Store size={18} />,
+        roles: ["ADMIN", "SHOP_OWNER"],
+      },
+      {
+        href: "/users",
+        label: "Users",
+        icon: <Settings size={18} />,
+        roles: ["ADMIN", "SHOP_OWNER"],
+      },
     ];
 
     return items.filter((it) => !it.roles || (role && it.roles.includes(role)));
@@ -145,10 +188,10 @@ export default function BottomNav() {
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop (Dark SaaS) */}
       {needsMore && moreOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-black/30"
+          className="md:hidden fixed inset-0 z-40 modal-backdrop"
           onClick={() => setMoreOpen(false)}
           aria-hidden="true"
         />
@@ -158,61 +201,73 @@ export default function BottomNav() {
       {needsMore && moreOpen && (
         <div className="md:hidden fixed left-0 right-0 bottom-0 z-50">
           <div
+            id="bottomnav-more-sheet"
             className={cls(
               "mx-3 overflow-hidden",
-              "mb-[calc(72px+env(safe-area-inset-bottom))]",
-              "rounded-2xl border bg-white shadow-xl"
+              "mb-[calc(72px+env(safe-area-inset-bottom))]"
             )}
           >
-            <div className="px-4 py-3 border-b flex items-center justify-between">
-              <div className="text-sm font-semibold">More</div>
-
-              {/* ✅ standardized icon button */}
-              <button
-                className="btn btn-ghost btn-icon-sm"
-                onClick={() => setMoreOpen(false)}
-                aria-label="Close"
-                type="button"
+            <div className="modal">
+              <div
+                className="px-4 py-3 flex items-center justify-between"
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
               >
-                <X size={16} />
-              </button>
+                <div className="text-sm font-semibold">More</div>
+
+                <button
+                  className="btn btn-ghost btn-icon-sm"
+                  onClick={() => setMoreOpen(false)}
+                  aria-label="Close"
+                  type="button"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-3 grid grid-cols-2 gap-2">
+                {overflowTabs.map((t) => {
+                  const active = isActivePath(pathname, t.href);
+
+                  return (
+                    <Link
+                      key={t.href}
+                      href={t.href}
+                      onClick={() => setMoreOpen(false)}
+                      aria-current={active ? "page" : undefined}
+                      className={cls("btn btn-secondary justify-start gap-2 w-full")}
+                      style={
+                        active
+                          ? {
+                              background: "rgba(var(--brand),0.12)",
+                              borderColor: "rgba(var(--brand),0.25)",
+                            }
+                          : undefined
+                      }
+                    >
+                      <span className={cls(active ? "opacity-100" : "opacity-80")}>{t.icon}</span>
+                      <span className="truncate">{t.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+
+              <div className="px-4 pb-3 text-[11px] subtle">
+                Tip: Use this menu for admin screens.
+              </div>
             </div>
-
-            <div className="p-3 grid grid-cols-2 gap-2">
-              {overflowTabs.map((t) => {
-                const active = isActivePath(pathname, t.href);
-
-                return (
-                  <Link
-                    key={t.href}
-                    href={t.href}
-                    onClick={() => setMoreOpen(false)}
-                    aria-current={active ? "page" : undefined}
-                    className={cls(
-                      // ✅ now uses your button system so it matches everywhere
-                      "btn btn-secondary justify-start gap-2 w-full",
-                      active && "bg-[rgba(var(--brand),0.12)] border-[rgba(var(--brand),0.25)]"
-                    )}
-                  >
-                    <span className={cls(active ? "opacity-100" : "opacity-80")}>{t.icon}</span>
-                    <span className="truncate">{t.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
-
-            <div className="px-4 pb-3 text-[11px] text-gray-500">Tip: Use this menu for admin screens.</div>
           </div>
         </div>
       )}
 
       {/* Bottom Bar */}
       <nav
-        className={cls(
-          "md:hidden fixed bottom-0 left-0 right-0 z-50 border-t",
-          "bg-white/85 backdrop-blur"
-        )}
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        className={cls("md:hidden fixed bottom-0 left-0 right-0 z-50")}
+        style={{
+          paddingBottom: "env(safe-area-inset-bottom)",
+          background: "rgba(var(--sidebar), 0.92)",
+          borderTop: "1px solid rgba(255,255,255,0.06)",
+          backdropFilter: "blur(10px)",
+        }}
         aria-label="Bottom navigation"
       >
         <div className="grid grid-cols-4 px-2">
@@ -231,20 +286,21 @@ export default function BottomNav() {
               type="button"
               className={cls(
                 "flex flex-col items-center justify-center gap-1 py-2 select-none transition",
-                "text-[11px] leading-tight",
-                moreIsActive || moreOpen ? "text-[rgb(var(--fg))]" : "text-[rgb(var(--fg-muted))]"
+                "text-[11px] leading-tight"
               )}
+              style={{
+                color: moreIsActive || moreOpen ? "rgb(var(--fg))" : "rgb(var(--fg-muted))",
+              }}
               onClick={() => setMoreOpen((v) => !v)}
               aria-expanded={moreOpen}
               aria-controls="bottomnav-more-sheet"
             >
               <div
-                className={cls(
-                  "h-9 w-14 rounded-2xl flex items-center justify-center transition border",
-                  moreIsActive || moreOpen
-                    ? "bg-[rgba(var(--brand),0.10)] border-[rgba(var(--brand),0.25)]"
-                    : "border-transparent"
-                )}
+                className="h-9 w-14 rounded-2xl flex items-center justify-center transition border"
+                style={{
+                  background: moreIsActive || moreOpen ? "rgba(var(--brand),0.10)" : "transparent",
+                  borderColor: moreIsActive || moreOpen ? "rgba(var(--brand),0.25)" : "transparent",
+                }}
               >
                 <ChevronDown
                   size={18}
@@ -252,7 +308,12 @@ export default function BottomNav() {
                 />
               </div>
 
-              <div className={cls("max-w-full truncate", moreIsActive || moreOpen ? "font-semibold" : "font-medium")}>
+              <div
+                className={cls(
+                  "max-w-full truncate",
+                  moreIsActive || moreOpen ? "font-semibold" : "font-medium"
+                )}
+              >
                 More
               </div>
             </button>
@@ -261,9 +322,6 @@ export default function BottomNav() {
           )}
         </div>
       </nav>
-
-      {/* Spacer so content doesn't hide behind bottom nav */}
-      <div className="md:hidden" style={{ height: `calc(72px + env(safe-area-inset-bottom))` }} />
     </>
   );
 }

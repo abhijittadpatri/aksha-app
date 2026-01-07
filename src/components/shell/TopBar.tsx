@@ -1,4 +1,3 @@
-// src/components/shell/TopBar.tsx
 "use client";
 
 import Link from "next/link";
@@ -136,11 +135,13 @@ export default function TopBar() {
 
   return (
     <header
-      className={cls(
-        "md:hidden sticky top-0 z-40 border-b",
-        "bg-white/85 backdrop-blur"
-      )}
-      style={{ paddingTop: "env(safe-area-inset-top)" }}
+      className={cls("md:hidden sticky top-0 z-40")}
+      style={{
+        paddingTop: "env(safe-area-inset-top)",
+        background: "rgba(var(--sidebar), 0.92)",
+        borderBottom: "1px solid rgba(255,255,255,0.06)",
+        backdropFilter: "blur(10px)",
+      }}
     >
       <div className="px-3 pt-3 pb-3">
         {/* Row 1: Title + Role + Logout */}
@@ -179,7 +180,13 @@ export default function TopBar() {
         {/* Row 2: Store Switcher */}
         <div className="mt-3">
           {me === undefined ? (
-            <div className="h-10 w-full rounded-xl bg-gray-100 animate-pulse" />
+            <div
+              className="h-10 w-full rounded-xl animate-pulse"
+              style={{
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.06)",
+              }}
+            />
           ) : activeStores.length ? (
             <div className="flex items-center gap-2">
               <div className="relative w-full">
@@ -211,7 +218,9 @@ export default function TopBar() {
                 />
               </div>
 
-              {isOwner && activeStoreId === "all" ? <span className="badge">Consolidated</span> : null}
+              {isOwner && activeStoreId === "all" ? (
+                <span className="badge">Consolidated</span>
+              ) : null}
             </div>
           ) : (
             <div className="text-xs subtle">No active stores…</div>
