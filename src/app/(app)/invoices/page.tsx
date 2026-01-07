@@ -3,9 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
+function safeNumber(v: any) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function money(n: any) {
-  const x = Number(n || 0);
-  return x.toFixed(2);
+  return safeNumber(n).toFixed(2);
 }
 
 function safeDate(d: any) {
@@ -16,13 +20,16 @@ function safeDate(d: any) {
   }
 }
 
-function cls(...xs: Array<string | false | null | undefined>) {
-  return xs.filter(Boolean).join(" ");
-}
-
 type Me = {
   role: "ADMIN" | "SHOP_OWNER" | "DOCTOR" | "BILLING";
 };
+
+function paymentBadge(statusRaw: any) {
+  const s = String(statusRaw ?? "Unpaid").toLowerCase();
+  if (s === "paid") return <span className="badge badge-ok">Paid</span>;
+  if (s === "partial") return <span className="badge badge-warn">Partial</span>;
+  return <span className="badge badge-warn">Unpaid</span>;
+}
 
 export default function InvoicesPage() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
@@ -88,7 +95,6 @@ export default function InvoicesPage() {
   }, []);
 
   useEffect(() => {
-    // Only load after we know user (prevents flash/unauthorized calls)
     if (me === undefined) return;
     if (me === null) return;
     if (!canView) return;
@@ -112,7 +118,8 @@ export default function InvoicesPage() {
   return (
     <main className="p-4 md:p-6">
       <div className="page space-y-4">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+        {/* Header */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
             <h1 className="h1">Invoices</h1>
             <p className="subtle truncate">
@@ -125,70 +132,64 @@ export default function InvoicesPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Link className="btn" href="/patients">
+          <div className="flex gap-2 w-full md:w-auto">
+            <Link className="btn btn-secondary w-full md:w-auto" href="/patients">
               Go to Patients
             </Link>
-            <button className="btn" onClick={load} disabled={loading}>
-              {loading ? "Refreshing..." : "Refresh"}
+
+            <button
+              className="btn btn-secondary w-full md:w-auto"
+              onClick={load}
+              disabled={loading}
+              type="button"
+            >
+              {loading ? "Refreshing…" : "Refresh"}
             </button>
           </div>
         </div>
 
-        {err && <div className="text-sm text-red-600">{err}</div>}
+        {err && <div className="text-sm text-red-400">{err}</div>}
 
+        {/* Content */}
         <div className="card card-pad">
-          {/* ---------------- MOBILE (Cards) ---------------- */}
+          {/* -------- Mobile (cards) -------- */}
           <div className="md:hidden space-y-3">
             {loading && invoices.length === 0 && !err && (
-              <div className="text-sm text-gray-500">Loading invoices…</div>
+              <div className="text-sm muted">Loading invoices…</div>
             )}
 
             {invoices.map((inv) => {
-              const total = inv.totalsJson?.total ?? inv.total ?? 0;
-              const status = inv.paymentStatus ?? "Unpaid";
+              const total = inv?.totalsJson?.total ?? inv?.total ?? 0;
+              const status = inv?.paymentStatus ?? inv?.totalsJson?.paymentStatus ?? "Unpaid";
 
               return (
-                <div key={inv.id} className="border rounded-2xl bg-white p-3 space-y-2">
-                  <div className="flex items-start justify-between gap-2">
+                <div key={inv.id} className="panel p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="font-medium truncate">
+                      <div className="font-semibold truncate">
                         {inv.invoiceNo ?? "Invoice"}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        {safeDate(inv.createdAt)}
-                      </div>
+                      <div className="text-xs muted truncate">{safeDate(inv.createdAt)}</div>
                     </div>
 
                     <div className="shrink-0 text-right">
-                      <div className="font-semibold whitespace-nowrap">
-                        ₹{money(total)}
-                      </div>
-                      <span className="inline-block mt-1 text-[11px] px-2 py-1 rounded-full bg-gray-100 whitespace-nowrap">
-                        {status}
-                      </span>
+                      <div className="font-semibold whitespace-nowrap">₹{money(total)}</div>
+                      <div className="mt-1">{paymentBadge(status)}</div>
                     </div>
                   </div>
 
-                  <div className="border-t pt-2">
-                    <div className="text-sm min-w-0">
-                      <div className="truncate">
-                        <span className="text-gray-500">Patient: </span>
-                        <span className="font-medium">{inv.patient?.name ?? "-"}</span>
-                      </div>
-
-                      {showStoreLine && (
-                        <div className="text-xs text-gray-500 truncate mt-1">
-                          {inv.store?.name ? `Store: ${inv.store.name}` : ""}
-                        </div>
-                      )}
+                  <div className="surface-muted p-3">
+                    <div className="text-sm truncate">
+                      <span className="muted">Patient: </span>
+                      <span className="font-medium">{inv.patient?.name ?? "-"}</span>
                     </div>
 
-                    <div className="mt-2 flex items-center justify-end">
-                      <Link
-                        className="underline text-sm"
-                        href={`/invoices/${inv.id}`}
-                      >
+                    {showStoreLine && inv.store?.name ? (
+                      <div className="text-xs muted truncate mt-1">Store: {inv.store.name}</div>
+                    ) : null}
+
+                    <div className="mt-3 flex justify-end">
+                      <Link className="btn btn-secondary btn-sm" href={`/invoices/${inv.id}`}>
                         View
                       </Link>
                     </div>
@@ -198,58 +199,63 @@ export default function InvoicesPage() {
             })}
 
             {!loading && invoices.length === 0 && !err && (
-              <div className="text-sm text-gray-500">No invoices yet.</div>
+              <div className="panel p-4 text-sm muted">No invoices yet.</div>
             )}
           </div>
 
-          {/* ---------------- DESKTOP (Table) ---------------- */}
-          <div className="hidden md:block border rounded-xl overflow-hidden bg-white">
-            <div className="grid grid-cols-5 bg-gray-50 text-sm font-medium p-3">
-              <div>Invoice</div>
-              <div>Patient</div>
-              <div>Status</div>
-              <div className="text-right">Total</div>
-              <div className="text-right">Open</div>
+          {/* -------- Desktop (table) -------- */}
+          <div className="hidden md:block table">
+            <div className="table-head grid-cols-12 p-3">
+              <div className="col-span-3">Invoice</div>
+              <div className="col-span-4">Patient</div>
+              <div className="col-span-2">Status</div>
+              <div className="col-span-2 text-right">Total</div>
+              <div className="col-span-1 text-right">Open</div>
             </div>
 
             {loading && invoices.length === 0 && !err && (
-              <div className="p-4 text-sm text-gray-500">Loading invoices…</div>
+              <div className="p-4 text-sm muted">Loading invoices…</div>
             )}
 
-            {invoices.map((inv) => (
-              <div key={inv.id} className="grid grid-cols-5 p-3 text-sm border-t">
-                <div className="min-w-0">
-                  <div className="font-medium truncate">{inv.invoiceNo ?? "Invoice"}</div>
-                  <div className="text-xs text-gray-500">{safeDate(inv.createdAt)}</div>
-                </div>
+            {invoices.map((inv) => {
+              const total = inv?.totalsJson?.total ?? inv?.total ?? 0;
+              const status = inv?.paymentStatus ?? inv?.totalsJson?.paymentStatus ?? "Unpaid";
 
-                <div className="min-w-0">
-                  <div className="truncate">{inv.patient?.name ?? "-"}</div>
-                  <div className="text-xs text-gray-500 truncate">
-                    {inv.store?.name ? `Store: ${inv.store.name}` : ""}
+              return (
+                <div key={inv.id} className="table-row grid-cols-12 p-3 items-center">
+                  <div className="col-span-3 min-w-0">
+                    <div className="font-medium truncate">{inv.invoiceNo ?? "Invoice"}</div>
+                    <div className="text-xs muted truncate">{safeDate(inv.createdAt)}</div>
+                  </div>
+
+                  <div className="col-span-4 min-w-0">
+                    <div className="truncate">{inv.patient?.name ?? "-"}</div>
+                    {showStoreLine && inv.store?.name ? (
+                      <div className="text-xs muted truncate">Store: {inv.store.name}</div>
+                    ) : (
+                      <div className="text-xs muted truncate">
+                        {inv.store?.name ? `Store: ${inv.store.name}` : ""}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="col-span-2">{paymentBadge(status)}</div>
+
+                  <div className="col-span-2 text-right font-medium whitespace-nowrap">
+                    ₹{money(total)}
+                  </div>
+
+                  <div className="col-span-1 text-right">
+                    <Link className="btn btn-secondary btn-sm" href={`/invoices/${inv.id}`}>
+                      View
+                    </Link>
                   </div>
                 </div>
-
-                <div>
-                  <span className="text-xs px-2 py-1 rounded-full bg-gray-100 whitespace-nowrap">
-                    {inv.paymentStatus ?? "Unpaid"}
-                  </span>
-                </div>
-
-                <div className="text-right font-medium whitespace-nowrap">
-                  ₹{money(inv.totalsJson?.total ?? inv.total ?? 0)}
-                </div>
-
-                <div className="text-right">
-                  <Link className="underline" href={`/invoices/${inv.id}`}>
-                    View
-                  </Link>
-                </div>
-              </div>
-            ))}
+              );
+            })}
 
             {!loading && invoices.length === 0 && !err && (
-              <div className="p-4 text-sm text-gray-500">No invoices yet.</div>
+              <div className="p-6 text-sm muted">No invoices yet.</div>
             )}
           </div>
         </div>

@@ -1,3 +1,4 @@
+// src/app/login/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -36,7 +37,6 @@ export default function LoginPage() {
         return;
       }
 
-      // If API tells us to force password change, respect it
       if (data.mustChangePassword) {
         router.push("/change-password");
         router.refresh();
@@ -53,46 +53,101 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-[70vh] flex items-center justify-center p-6">
-      <div className="w-full max-w-md border rounded-2xl p-6 space-y-4 bg-white">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold">Sign in</h1>
-          <p className="text-sm text-gray-600">Use your email and password.</p>
+    <main className="min-h-[80vh] flex items-center justify-center p-6">
+      <div className="w-full max-w-md">
+        {/* Brand header (dark SaaS style) */}
+        <div className="mb-4">
+          <div className="flex items-center gap-3">
+            <div
+              className="h-10 w-10 rounded-2xl"
+              style={{
+                background:
+                  "radial-gradient(120% 120% at 30% 20%, rgba(var(--brand),0.55), rgba(var(--brand),0.12))",
+                boxShadow: "0 18px 40px rgba(var(--brand),0.18)",
+                border: "1px solid rgba(255,255,255,0.10)",
+              }}
+            />
+            <div className="min-w-0">
+              <div className="text-lg font-semibold leading-tight">Aksha</div>
+              <div className="text-xs muted">Clinic OS • Secure Sign-in</div>
+            </div>
+          </div>
         </div>
 
-        {err && <div className="text-sm text-red-600">{err}</div>}
+        {/* Card */}
+        <div className="card card-pad space-y-4">
+          <div className="space-y-1">
+            <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
+            <p className="text-sm muted">Use your email and password to continue.</p>
+          </div>
 
-        <div className="grid grid-cols-1 gap-3">
-          <input
-            className="border rounded-lg p-2"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
-          />
-          <input
-            className="border rounded-lg p-2"
-            placeholder="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") submit();
-            }}
-          />
+          {err && (
+            <div
+              className="rounded-xl px-3 py-2 text-sm"
+              style={{
+                background: "rgba(var(--danger), 0.16)",
+                border: "1px solid rgba(var(--danger), 0.25)",
+                color: "rgb(var(--fg))",
+              }}
+            >
+              {err}
+            </div>
+          )}
 
-          <button
-            className="bg-black text-white rounded-lg p-2 disabled:opacity-60"
-            onClick={submit}
-            disabled={busy}
-          >
-            {busy ? "Signing in..." : "Login"}
-          </button>
+          <div className="grid grid-cols-1 gap-3">
+            <div className="space-y-1">
+              <div className="label">Email</div>
+              <input
+                className="input"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                inputMode="email"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <div className="label">Password</div>
+              <input
+                className="input"
+                placeholder="••••••••"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") submit();
+                }}
+              />
+            </div>
+
+            <button className="btn btn-primary w-full" onClick={submit} disabled={busy} type="button">
+              {busy ? "Signing in..." : "Login"}
+            </button>
+
+            <button
+              className="btn btn-secondary w-full"
+              type="button"
+              onClick={() => {
+                setEmail("");
+                setPassword("");
+                setErr(null);
+              }}
+              disabled={busy}
+            >
+              Clear
+            </button>
+          </div>
+
+          <div className="text-xs muted">
+            If your password was reset by Admin, you may be redirected to change it.
+          </div>
         </div>
 
-        <div className="text-xs text-gray-500">
-          If your password was reset by Admin, you may be redirected to change it.
+        {/* Tiny footer */}
+        <div className="mt-4 text-[11px] muted text-center">
+          © {new Date().getFullYear()} Aksha • Dark SaaS Theme
         </div>
       </div>
     </main>

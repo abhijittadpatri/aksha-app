@@ -12,10 +12,6 @@ type Patient = {
   createdAt: string;
 };
 
-function cls(...xs: Array<string | false | null | undefined>) {
-  return xs.filter(Boolean).join(" ");
-}
-
 function safeJson(text: string) {
   try {
     return text ? JSON.parse(text) : {};
@@ -139,7 +135,7 @@ export default function PatientsPage() {
     <main className="p-4 md:p-6">
       <div className="page space-y-4">
         {/* Header */}
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
             <h1 className="h1">Patients</h1>
             <p className="subtle">Search, add and manage patient records.</p>
@@ -147,7 +143,7 @@ export default function PatientsPage() {
 
           <div className="flex gap-2 w-full md:w-auto">
             <button
-              className="btn btn-ghost border w-full md:w-auto"
+              className="btn btn-secondary w-full md:w-auto"
               onClick={load}
               disabled={loading}
             >
@@ -163,7 +159,7 @@ export default function PatientsPage() {
           </div>
         </div>
 
-        {/* Search */}
+        {/* Search / toolbar */}
         <div className="card card-pad">
           <div className="flex flex-col gap-2 md:flex-row md:items-center">
             <input
@@ -174,39 +170,39 @@ export default function PatientsPage() {
             />
             <div className="flex gap-2">
               <button
-                className="btn btn-ghost border w-full md:w-auto"
+                className="btn btn-secondary"
                 onClick={() => setQ("")}
                 disabled={!q.trim()}
-                title="Clear search"
               >
                 Clear
               </button>
-              <div className="badge">{filtered.length} result(s)</div>
+              <span className="badge">{filtered.length} result(s)</span>
             </div>
           </div>
 
-          {err && <div className="mt-3 text-sm text-red-600">{err}</div>}
+          {err && (
+            <div className="mt-3 text-sm text-red-400">{err}</div>
+          )}
         </div>
 
         {/* Mobile cards */}
         <div className="md:hidden space-y-3">
-          {loading && filtered.length === 0 && !err && (
-            <div className="text-sm text-gray-500">Loading patients…</div>
-          )}
-
           {filtered.map((p) => (
-            <div key={p.id} className="card card-pad">
+            <div key={p.id} className="panel p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="font-semibold truncate">{p.name}</div>
-                  <div className="mt-1 text-xs text-gray-600">
+                  <div className="mt-1 text-xs muted">
                     {p.mobile ? `📞 ${p.mobile}` : "—"}
                     {p.gender ? ` • ${p.gender}` : ""}
                     {p.age ? ` • ${p.age} yrs` : ""}
                   </div>
                 </div>
 
-                <Link className="btn btn-ghost border shrink-0" href={`/patients/${p.id}`}>
+                <Link
+                  className="btn btn-secondary btn-sm shrink-0"
+                  href={`/patients/${p.id}`}
+                >
                   Open
                 </Link>
               </div>
@@ -214,7 +210,7 @@ export default function PatientsPage() {
           ))}
 
           {!loading && filtered.length === 0 && (
-            <div className="card card-pad text-sm text-gray-500">
+            <div className="panel p-4 text-sm muted">
               No patients yet for this store.
             </div>
           )}
@@ -228,29 +224,26 @@ export default function PatientsPage() {
             <div className="col-span-3 text-right">Action</div>
           </div>
 
-          {loading && filtered.length === 0 && !err && (
-            <div className="p-4 text-sm text-gray-500">Loading patients…</div>
-          )}
-
           {filtered.map((p) => (
             <div
               key={p.id}
               className="table-row grid-cols-12 p-3 items-center"
             >
-              <div className="col-span-5 min-w-0">
-                <div className="font-medium truncate">{p.name}</div>
+              <div className="col-span-5 truncate font-medium">
+                {p.name}
               </div>
 
-              <div className="col-span-4 min-w-0">
-                <div className="text-xs text-gray-600 truncate">
-                  {p.mobile ? `📞 ${p.mobile}` : "—"}
-                  {p.gender ? ` • ${p.gender}` : ""}
-                  {p.age ? ` • ${p.age} yrs` : ""}
-                </div>
+              <div className="col-span-4 text-xs muted truncate">
+                {p.mobile ? `📞 ${p.mobile}` : "—"}
+                {p.gender ? ` • ${p.gender}` : ""}
+                {p.age ? ` • ${p.age} yrs` : ""}
               </div>
 
               <div className="col-span-3 text-right">
-                <Link className="btn btn-ghost border" href={`/patients/${p.id}`}>
+                <Link
+                  className="btn btn-secondary btn-sm"
+                  href={`/patients/${p.id}`}
+                >
                   Open
                 </Link>
               </div>
@@ -258,7 +251,7 @@ export default function PatientsPage() {
           ))}
 
           {!loading && filtered.length === 0 && (
-            <div className="p-6 text-gray-500">
+            <div className="p-6 muted">
               No patients yet for this store.
             </div>
           )}
@@ -266,12 +259,12 @@ export default function PatientsPage() {
 
         {/* Modal */}
         {open && (
-          <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-            <div className="bg-white w-full max-w-md rounded-2xl p-4 shadow max-h-[85vh] overflow-auto space-y-3">
-              <div className="flex justify-between items-center gap-3">
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+            <div className="card card-pad w-full max-w-md space-y-4">
+              <div className="flex justify-between items-center">
                 <h2 className="text-lg font-semibold">Add Patient</h2>
                 <button
-                  className="btn btn-ghost border"
+                  className="btn btn-ghost btn-sm"
                   onClick={() => {
                     setOpen(false);
                     setErr(null);
@@ -282,7 +275,7 @@ export default function PatientsPage() {
                 </button>
               </div>
 
-              {err && <div className="text-sm text-red-600">{err}</div>}
+              {err && <div className="text-sm text-red-400">{err}</div>}
 
               <div className="space-y-3">
                 <input
@@ -327,15 +320,15 @@ export default function PatientsPage() {
 
                 <div className="flex gap-2">
                   <button
-                    className="btn btn-primary w-full disabled:opacity-60"
+                    className="btn btn-primary w-full"
                     disabled={!name.trim() || saving}
                     onClick={createPatient}
                   >
-                    {saving ? "Saving..." : "Save Patient"}
+                    {saving ? "Saving…" : "Save Patient"}
                   </button>
 
                   <button
-                    className="btn btn-ghost border w-full"
+                    className="btn btn-secondary w-full"
                     onClick={() => {
                       setOpen(false);
                       resetForm();
@@ -348,7 +341,7 @@ export default function PatientsPage() {
                   </button>
                 </div>
 
-                <div className="text-xs text-gray-500">
+                <div className="text-xs muted">
                   Tip: Search supports name + mobile.
                 </div>
               </div>

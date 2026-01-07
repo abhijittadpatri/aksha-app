@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Modal from "@/components/ui/Modal";
 
 type Store = { id: string; name: string; city?: string | null };
 
-export type CreatedPayload =
-  | { email: string; tempPassword: string }
-  | undefined;
+export type CreatedPayload = { email: string; tempPassword: string } | undefined;
 
 function cls(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
@@ -52,20 +51,8 @@ export default function UserCreateModal({
     setSaving(false);
   }, [open]);
 
-  // Prevent background scroll while modal open (nice on mobile)
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
   function toggleStore(id: string) {
-    setStoreIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
+    setStoreIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
   async function create() {
@@ -73,8 +60,7 @@ export default function UserCreateModal({
 
     const e = email.trim().toLowerCase();
     if (!e) return setErr("Email is required");
-    if (!tempPassword || tempPassword.trim().length < 6)
-      return setErr("Temp password must be at least 6 characters");
+    if (!tempPassword || tempPassword.trim().length < 6) return setErr("Temp password must be at least 6 characters");
     if (storeIds.length === 0) return setErr("Select at least one store");
 
     setSaving(true);
@@ -86,7 +72,7 @@ export default function UserCreateModal({
         body: JSON.stringify({
           email: e,
           name: name.trim(),
-          role, // ADMIN | DOCTOR | BILLING only
+          role,
           storeIds,
           tempPassword: tempPassword.trim(),
         }),
@@ -107,152 +93,121 @@ export default function UserCreateModal({
     }
   }
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/30 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      role="dialog"
-      aria-modal="true"
-    >
-      {/* Click outside to close (optional but nice) */}
-      <div className="absolute inset-0" onClick={onClose} />
-
-      {/* Panel */}
-      <div className="relative w-full sm:max-w-xl bg-white rounded-t-2xl sm:rounded-2xl shadow">
-        {/* Scroll container (critical for mobile) */}
-        <div className="max-h-[85vh] overflow-y-auto p-4 space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Create User</h2>
-            <button className="text-sm underline" onClick={onClose}>
-              Close
-            </button>
-          </div>
-
-          <div className="text-xs text-gray-600">
-            <strong>Note:</strong> Owners (<code>SHOP_OWNER</code>) are created
-            manually for security reasons. You can create Admin, Doctor, or
-            Billing users here.
-          </div>
-
-          {err && <div className="text-sm text-red-600">{err}</div>}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <div className="text-xs text-gray-500 mb-1">Email *</div>
-              <input
-                className="w-full border rounded-lg p-2"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="user@clinic.com"
-                autoComplete="off"
-                inputMode="email"
-              />
-            </div>
-
-            <div>
-              <div className="text-xs text-gray-500 mb-1">Name</div>
-              <input
-                className="w-full border rounded-lg p-2"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Full name"
-                autoComplete="off"
-              />
-            </div>
-
-            <div>
-              <div className="text-xs text-gray-500 mb-1">Role *</div>
-              <select
-                className="w-full border rounded-lg p-2"
-                value={role}
-                onChange={(e) => setRole(e.target.value as any)}
-              >
-                <option value="ADMIN">Admin</option>
-                <option value="DOCTOR">Doctor</option>
-                <option value="BILLING">Billing</option>
-              </select>
-            </div>
-
-            <div>
-              <div className="text-xs text-gray-500 mb-1">Temp Password *</div>
-              <input
-                className="w-full border rounded-lg p-2"
-                value={tempPassword}
-                onChange={(e) => setTempPassword(e.target.value)}
-                placeholder="Min 6 characters"
-                type="password"
-                autoComplete="new-password"
-              />
-              <div className="text-[11px] text-gray-500 mt-1">
-                User will be forced to change on next login.
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <div className="text-xs text-gray-500">Stores *</div>
-              <div className="text-[11px] text-gray-400">
-                Selected: {storeIds.length}
-              </div>
-            </div>
-
-            {/* Stores scroll area */}
-            <div className="border rounded-xl p-2 max-h-[40vh] overflow-y-auto">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {stores.map((s) => {
-                  const checked = storeIds.includes(s.id);
-                  return (
-                    <button
-                      type="button"
-                      key={s.id}
-                      onClick={() => toggleStore(s.id)}
-                      className={cls(
-                        "border rounded-lg p-2 text-left text-sm transition",
-                        checked ? "bg-black text-white" : "bg-white hover:bg-gray-50"
-                      )}
-                    >
-                      <div className="font-medium">{s.name}</div>
-                      <div
-                        className={cls(
-                          "text-xs",
-                          checked ? "text-white/80" : "text-gray-500"
-                        )}
-                      >
-                        {s.city ?? ""}
-                      </div>
-                    </button>
-                  );
-                })}
-
-                {stores.length === 0 && (
-                  <div className="text-sm text-gray-500 p-2">
-                    No stores found. (Seed should create stores.)
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {storeIds.length === 0 && (
-              <div className="text-[11px] text-gray-500 mt-2">
-                Tip: choose at least one store.
-              </div>
-            )}
-          </div>
-
-          <button
-            className="w-full bg-black text-white rounded-lg p-2 disabled:opacity-50"
-            onClick={create}
-            disabled={saving}
-          >
-            {saving ? "Creating..." : "Create User"}
+    <Modal
+      open={open}
+      onClose={() => {
+        if (saving) return;
+        onClose();
+      }}
+      title="Create User"
+      description="Create Admin, Doctor, or Billing users (owners are created manually)."
+      size="md"
+      closeOnBackdrop
+      closeOnEsc
+      preventCloseWhileBusy
+      busy={saving}
+      footer={
+        <div className="pt-4 flex flex-col sm:flex-row gap-2">
+          <button className="btn btn-primary w-full" onClick={create} disabled={saving} type="button">
+            {saving ? "Creating…" : "Create User"}
           </button>
+          <button className="btn btn-secondary w-full" onClick={onClose} disabled={saving} type="button">
+            Cancel
+          </button>
+        </div>
+      }
+    >
+      <div className="surface-muted p-3 text-xs">
+        <span className="font-semibold">Note:</span> Owners (<code>SHOP_OWNER</code>) are created manually for security
+        reasons.
+      </div>
 
-          {/* Safe-area padding for iOS bottom bar */}
-          <div className="h-2" />
+      {err && <div className="text-sm text-red-400">{err}</div>}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <div className="label mb-1">Email *</div>
+          <input
+            className="input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="user@clinic.com"
+            autoComplete="off"
+            inputMode="email"
+          />
+        </div>
+
+        <div>
+          <div className="label mb-1">Name</div>
+          <input
+            className="input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Full name"
+            autoComplete="off"
+          />
+        </div>
+
+        <div>
+          <div className="label mb-1">Role *</div>
+          <select className="input" value={role} onChange={(e) => setRole(e.target.value as any)}>
+            <option value="ADMIN">Admin</option>
+            <option value="DOCTOR">Doctor</option>
+            <option value="BILLING">Billing</option>
+          </select>
+        </div>
+
+        <div>
+          <div className="label mb-1">Temp Password *</div>
+          <input
+            className="input"
+            value={tempPassword}
+            onChange={(e) => setTempPassword(e.target.value)}
+            placeholder="Min 6 characters"
+            type="password"
+            autoComplete="new-password"
+          />
+          <div className="text-[11px] muted mt-1">User will be forced to change on next login.</div>
         </div>
       </div>
-    </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="label">Stores *</div>
+          <div className="text-[11px] muted">Selected: {storeIds.length}</div>
+        </div>
+
+        <div className="surface-muted p-2 max-h-[40vh] overflow-y-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {stores.map((s) => {
+              const checked = storeIds.includes(s.id);
+              return (
+                <button
+                  type="button"
+                  key={s.id}
+                  onClick={() => toggleStore(s.id)}
+                  className={cls(
+                    "text-left text-sm rounded-xl px-3 py-2 transition border",
+                    checked
+                      ? "bg-[rgba(var(--brand),0.18)] border-[rgba(var(--brand),0.32)]"
+                      : "bg-[rgba(255,255,255,0.03)] border-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.05)]"
+                  )}
+                >
+                  <div className="font-medium truncate">{s.name}</div>
+                  <div className={cls("text-xs truncate", checked ? "text-[rgba(var(--fg),0.85)]" : "muted")}>
+                    {s.city ?? ""}
+                  </div>
+                </button>
+              );
+            })}
+
+            {stores.length === 0 && <div className="text-sm muted p-2">No stores found.</div>}
+          </div>
+        </div>
+
+        {storeIds.length === 0 && <div className="text-[11px] muted">Tip: choose at least one store.</div>}
+      </div>
+    </Modal>
   );
 }

@@ -5,13 +5,32 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { buildInvoiceWhatsAppMessage } from "@/lib/whatsapp";
 
+function safeNumber(v: any) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function money(n: any) {
-  const x = Number(n || 0);
-  return x.toFixed(2);
+  return safeNumber(n).toFixed(2);
 }
 
 function cls(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
+}
+
+function safeDate(d: any) {
+  try {
+    return d ? new Date(d).toLocaleString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function paymentBadge(statusRaw: any) {
+  const s = String(statusRaw ?? "Unpaid").toLowerCase();
+  if (s === "paid") return <span className="badge badge-ok">Paid</span>;
+  if (s === "partial") return <span className="badge badge-warn">Partial</span>;
+  return <span className="badge badge-warn">Unpaid</span>;
 }
 
 export default function InvoicePage() {
@@ -77,7 +96,7 @@ export default function InvoicePage() {
     const invoiceNo = invoice.invoiceNo ?? "Invoice";
     const amount = Number(invoice.totalsJson?.total ?? 0);
     const psRaw = String(invoice.paymentStatus ?? "Unpaid").toLowerCase();
-    const paymentStatus = psRaw === "paid" ? "PAID" : "UNPAID";
+    const paymentStatus = psRaw === "paid" ? "PAID" : psRaw === "partial" ? "PARTIAL" : "UNPAID";
 
     return buildInvoiceWhatsAppMessage({
       clinicOrStoreName,
@@ -101,7 +120,6 @@ export default function InvoicePage() {
       await navigator.clipboard.writeText(waMessage);
       setToast("Message copied ✅");
     } catch {
-      // fallback
       const ta = document.createElement("textarea");
       ta.value = waMessage;
       document.body.appendChild(ta);
@@ -112,13 +130,16 @@ export default function InvoicePage() {
     }
   }
 
-  const createdAtLabel = useMemo(() => {
-    try {
-      return invoice?.createdAt ? new Date(invoice.createdAt).toLocaleString() : "";
-    } catch {
-      return "";
-    }
-  }, [invoice?.createdAt]);
+  const createdAtLabel = useMemo(() => safeDate(invoice?.createdAt), [invoice?.createdAt]);
+
+  const totals = useMemo(() => {
+    const subTotal = safeNumber(invoice?.totalsJson?.subTotal);
+    const discount = safeNumber(invoice?.totalsJson?.discount);
+    const total = safeNumber(invoice?.totalsJson?.total ?? invoice?.total);
+    const mode = String(invoice?.totalsJson?.paymentMode ?? invoice?.paymentMode ?? "Cash");
+    const status = String(invoice?.paymentStatus ?? invoice?.totalsJson?.paymentStatus ?? "Unpaid");
+    return { subTotal, discount, total, mode, status };
+  }, [invoice]);
 
   return (
     <>
@@ -127,32 +148,34 @@ export default function InvoicePage() {
           {/* Header */}
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
-              <Link className="text-sm underline" href="/invoices">
+              <Link className="link text-sm" href="/invoices">
                 ← Back to Invoices
               </Link>
+
               <div className="mt-2">
                 <h1 className="h1 truncate">
                   {invoice?.invoiceNo ? `Invoice ${invoice.invoiceNo}` : "Invoice"}
                 </h1>
                 <p className="subtle truncate">
-                  {invoice?.store?.name ? invoice.store.name : "Store"}{" "}
-                  {createdAtLabel ? `• ${createdAtLabel}` : ""}
+                  {invoice?.store?.name ? invoice.store.name : "Store"}
+                  {createdAtLabel ? ` • ${createdAtLabel}` : ""}
                 </p>
               </div>
             </div>
 
-            {/* Actions: mobile grid, desktop inline */}
+            {/* Actions */}
             <div className="w-full md:w-auto">
               <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:justify-end">
-                <button className="btn btn-ghost border" onClick={() => window.print()}>
+                <button className="btn btn-secondary" onClick={() => window.print()} type="button">
                   Print
                 </button>
 
                 <button
-                  className="btn btn-ghost border"
+                  className="btn btn-secondary"
                   onClick={copyMessage}
                   disabled={!waMessage}
                   title={!waMessage ? "Invoice not loaded yet" : "Copy WhatsApp message"}
+                  type="button"
                 >
                   Copy Message
                 </button>
@@ -160,7 +183,7 @@ export default function InvoicePage() {
                 <a
                   className={cls(
                     "btn",
-                    hasMobile ? "btn-primary" : "btn-ghost border opacity-60 pointer-events-none"
+                    hasMobile ? "btn-primary" : "btn-secondary opacity-60 pointer-events-none"
                   )}
                   href={hasMobile ? waLink : "#"}
                   target="_blank"
@@ -170,24 +193,22 @@ export default function InvoicePage() {
                   WhatsApp
                 </a>
 
-                <button className="btn btn-ghost border" onClick={load} disabled={loading}>
+                <button className="btn btn-secondary" onClick={load} disabled={loading} type="button">
                   {loading ? "Refreshing…" : "Refresh"}
                 </button>
               </div>
 
               {!hasMobile && invoice && (
-                <div className="mt-2 text-xs text-gray-500">
-                  WhatsApp disabled: patient mobile not available.
-                </div>
+                <div className="mt-2 text-xs muted">WhatsApp disabled: patient mobile not available.</div>
               )}
             </div>
           </div>
 
           {/* Toast */}
-          {toast && <div className="card card-pad text-sm">{toast}</div>}
+          {toast && <div className="panel p-3 text-sm">{toast}</div>}
 
           {/* Errors */}
-          {err && <div className="text-sm text-red-600">{err}</div>}
+          {err && <div className="text-sm text-red-400">{err}</div>}
 
           {/* Loading */}
           {loading && (
@@ -199,121 +220,134 @@ export default function InvoicePage() {
 
           {/* Content */}
           {invoice && !loading && (
-            <div className="card card-pad print-card bg-white space-y-4">
-              {/* Store + meta */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="text-lg font-semibold truncate">
-                    {invoice.store?.name ?? "Store"}
+            <div className="card card-pad print-card space-y-4">
+              {/* Summary strip */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="panel p-4">
+                  <div className="label">Total</div>
+                  <div className="mt-1 text-2xl font-semibold">₹{money(totals.total)}</div>
+                  <div className="mt-2 text-xs muted">
+                    Subtotal ₹{money(totals.subTotal)} • Discount ₹{money(totals.discount)}
                   </div>
-                  <div className="subtle truncate">{invoice.store?.city ?? ""}</div>
                 </div>
 
-                <div className="text-right shrink-0">
-                  <div className="badge">{invoice.invoiceNo}</div>
-                  <div className="subtle mt-1 text-xs">{createdAtLabel}</div>
+                <div className="panel p-4">
+                  <div className="label">Payment status</div>
+                  <div className="mt-2">{paymentBadge(totals.status)}</div>
+                  <div className="mt-2 text-xs muted">Mode: {totals.mode || "-"}</div>
+                </div>
+
+                <div className="panel p-4">
+                  <div className="label">Store</div>
+                  <div className="mt-1 text-lg font-semibold truncate">{invoice.store?.name ?? "Store"}</div>
+                  <div className="mt-2 text-xs muted truncate">{invoice.store?.city ?? ""}</div>
+                  <div className="mt-2 text-xs muted truncate">{createdAtLabel}</div>
                 </div>
               </div>
 
               {/* Billed To */}
-              <div className="border-t pt-3">
+              <div className="panel p-4">
                 <div className="h2">Billed To</div>
-                <div className="mt-1 text-sm font-medium truncate">
-                  {invoice.patient?.name ?? "-"}
-                </div>
-                <div className="text-xs text-gray-600 truncate">
-                  {invoice.patient?.mobile ?? ""}
+                <div className="mt-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold truncate">{invoice.patient?.name ?? "-"}</div>
+                    <div className="text-xs muted truncate">{invoice.patient?.mobile ?? ""}</div>
+                  </div>
+                  <div className="shrink-0">
+                    <span className="badge">{invoice.invoiceNo ?? "Invoice"}</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Items: mobile cards */}
-              <div className="border-t pt-3 space-y-2">
-                <div className="h2">Items</div>
+              {/* Items */}
+              <div className="panel p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="h2">Items</div>
+                  <div className="text-xs muted">{items.length} item(s)</div>
+                </div>
 
-                {/* Mobile list */}
+                {/* Mobile items */}
                 <div className="space-y-2 md:hidden">
                   {items.map((it: any, idx: number) => {
-                    const qty = Number(it.qty || 0);
-                    const rate = Number(it.rate || 0);
+                    const qty = safeNumber(it.qty);
+                    const rate = safeNumber(it.rate);
                     const amt = qty * rate;
 
                     return (
-                      <div key={idx} className="border rounded-xl p-3">
+                      <div key={idx} className="surface-muted p-3">
                         <div className="font-medium truncate">{it.name ?? "Item"}</div>
-                        <div className="mt-1 flex items-center justify-between text-xs text-gray-600">
+                        <div className="mt-2 flex items-center justify-between text-xs muted">
                           <span>
-                            Qty: <span className="font-medium">{qty}</span>
+                            Qty: <span className="text-[rgb(var(--fg))] font-medium">{qty}</span>
                           </span>
                           <span>
-                            Rate: <span className="font-medium">₹{money(rate)}</span>
+                            Rate: <span className="text-[rgb(var(--fg))] font-medium">₹{money(rate)}</span>
                           </span>
                         </div>
                         <div className="mt-2 flex items-center justify-between">
-                          <span className="text-xs text-gray-600">Amount</span>
+                          <span className="text-xs muted">Amount</span>
                           <span className="font-semibold">₹{money(amt)}</span>
                         </div>
                       </div>
                     );
                   })}
 
-                  {items.length === 0 && (
-                    <div className="p-3 text-sm text-gray-500 border rounded-xl">No items.</div>
-                  )}
+                  {items.length === 0 && <div className="surface-muted p-3 text-sm muted">No items.</div>}
                 </div>
 
                 {/* Desktop table */}
-                <div className="hidden md:block border rounded-xl overflow-hidden bg-white">
-                  <div className="grid grid-cols-4 bg-gray-50 text-sm p-2 font-medium">
-                    <div className="col-span-2">Item</div>
-                    <div className="text-right">Qty</div>
-                    <div className="text-right">Amount</div>
+                <div className="hidden md:block table">
+                  <div className="table-head grid-cols-12 p-3">
+                    <div className="col-span-7">Item</div>
+                    <div className="col-span-2 text-right">Qty</div>
+                    <div className="col-span-3 text-right">Amount</div>
                   </div>
 
                   {items.map((it: any, idx: number) => {
-                    const qty = Number(it.qty || 0);
-                    const rate = Number(it.rate || 0);
+                    const qty = safeNumber(it.qty);
+                    const rate = safeNumber(it.rate);
                     const amt = qty * rate;
 
                     return (
-                      <div key={idx} className="grid grid-cols-4 text-sm p-2 border-t">
-                        <div className="col-span-2">{it.name}</div>
-                        <div className="text-right">{qty}</div>
-                        <div className="text-right">₹{money(amt)}</div>
+                      <div key={idx} className="table-row grid-cols-12 p-3 items-center">
+                        <div className="col-span-7 min-w-0 truncate">{it.name ?? "Item"}</div>
+                        <div className="col-span-2 text-right">{qty}</div>
+                        <div className="col-span-3 text-right font-medium">₹{money(amt)}</div>
                       </div>
                     );
                   })}
 
-                  {items.length === 0 && (
-                    <div className="p-3 text-sm text-gray-500">No items.</div>
-                  )}
+                  {items.length === 0 && <div className="p-4 text-sm muted">No items.</div>}
                 </div>
               </div>
 
               {/* Totals */}
-              <div className="border-t pt-3">
-                <div className="flex flex-col sm:flex-row sm:justify-end">
-                  <div className="w-full sm:max-w-sm space-y-1 text-sm">
+              <div className="panel p-4">
+                <div className="flex flex-col md:flex-row md:justify-end">
+                  <div className="w-full md:max-w-sm space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span>Subtotal</span>
-                      <span>₹{money(invoice.totalsJson?.subTotal)}</span>
+                      <span className="muted">Subtotal</span>
+                      <span>₹{money(totals.subTotal)}</span>
                     </div>
+
                     <div className="flex justify-between">
-                      <span>Discount</span>
-                      <span>₹{money(invoice.totalsJson?.discount)}</span>
+                      <span className="muted">Discount</span>
+                      <span>₹{money(totals.discount)}</span>
                     </div>
-                    <div className="flex justify-between font-semibold text-base">
+
+                    <div className="flex justify-between text-base font-semibold">
                       <span>Total</span>
-                      <span>₹{money(invoice.totalsJson?.total)}</span>
+                      <span>₹{money(totals.total)}</span>
                     </div>
-                    <div className="subtle text-xs">
-                      Payment: {invoice.totalsJson?.paymentMode ?? "-"} •{" "}
-                      {invoice.paymentStatus ?? "Unpaid"}
+
+                    <div className="text-xs muted">
+                      Payment mode: {totals.mode || "-"} • Status: {String(totals.status || "Unpaid")}
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="text-center text-xs text-gray-600 pt-2 border-t">
+              <div className="text-center text-xs muted">
                 Thank you for visiting.
               </div>
             </div>
@@ -325,7 +359,10 @@ export default function InvoicePage() {
         @media print {
           a, button { display: none !important; }
           main { padding: 0 !important; }
-          .print-card { border: none !important; box-shadow: none !important; }
+          .print-card { border: none !important; box-shadow: none !important; background: white !important; color: #111 !important; }
+          .print-card * { color: #111 !important; }
+          .panel, .surface-muted, .table { border: 1px solid rgba(0,0,0,0.12) !important; background: white !important; box-shadow: none !important; }
+          .badge { border: 1px solid rgba(0,0,0,0.12) !important; background: white !important; color: #111 !important; }
         }
       `}</style>
     </>

@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+function safeNumber(v: any) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function money(n: any) {
-  const x = Number(n || 0);
-  return x.toFixed(2);
+  return safeNumber(n).toFixed(2);
 }
 
 function pct(v: any) {
@@ -16,7 +20,7 @@ function pct(v: any) {
 }
 
 function signedMoney(n: any) {
-  const x = Number(n || 0);
+  const x = safeNumber(n);
   const sign = x >= 0 ? "+" : "-";
   return `${sign}₹${money(Math.abs(x))}`;
 }
@@ -43,6 +47,48 @@ type Me = {
   role: "ADMIN" | "SHOP_OWNER" | "DOCTOR" | "BILLING";
   tenant?: { name?: string | null } | null;
 };
+
+function DeltaPill({ delta, deltaPctVal }: { delta: number; deltaPctVal: number }) {
+  const up = safeNumber(delta) >= 0;
+  return (
+    <span className={cls("badge", up ? "badge-ok" : "badge-danger")}>
+      {signedMoney(delta)} ({pct(deltaPctVal)})
+    </span>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  hint,
+  delta,
+  deltaPctVal,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  delta?: number;
+  deltaPctVal?: number;
+}) {
+  return (
+    <div className="panel p-4">
+      <div className="label">{label}</div>
+
+      {/* Big number should never truncate */}
+      <div className="kpi mt-2 leading-tight break-words">{value}</div>
+
+      {/* Delta goes UNDER the number (prevents squish/truncation) */}
+      {delta !== undefined && deltaPctVal !== undefined ? (
+        <div className="mt-2">
+          <DeltaPill delta={delta} deltaPctVal={deltaPctVal} />
+        </div>
+      ) : null}
+
+      {hint ? <div className="mt-2 text-xs muted">{hint}</div> : null}
+    </div>
+  );
+}
+
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
@@ -72,7 +118,6 @@ export default function DashboardPage() {
     setErr(null);
     setLoading(true);
     try {
-      // ✅ Use the stable endpoint you already have working
       const res = await fetch(`/api/insights/overview${qs}`, {
         credentials: "include",
       });
@@ -122,7 +167,6 @@ export default function DashboardPage() {
     // Same-tab changes: lightweight poll (keeps MVP simple)
     const t = setInterval(() => {
       const current = localStorage.getItem("activeStoreId") || "";
-      // if query would change, refresh
       if (current !== (activeStoreId || "")) load();
     }, 1400);
 
@@ -146,20 +190,6 @@ export default function DashboardPage() {
     (data?.scope?.id === "all" ? "All Stores" : data?.scope?.name) ??
     (activeStoreId === "all" ? "All Stores" : "Store");
 
-  const deltaPill = (delta: number, deltaPctVal: number) => {
-    const up = delta >= 0;
-    return (
-      <span
-        className={cls(
-          "text-[11px] px-2 py-1 rounded-full whitespace-nowrap",
-          up ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
-        )}
-      >
-        {signedMoney(delta)} ({pct(deltaPctVal)})
-      </span>
-    );
-  };
-
   const canSeeInsights = me?.role === "ADMIN" || me?.role === "SHOP_OWNER";
   const canSeePatients =
     me?.role === "ADMIN" ||
@@ -172,6 +202,7 @@ export default function DashboardPage() {
   return (
     <main className="p-4 md:p-6">
       <div className="page space-y-4">
+        {/* Header */}
         <div className="flex items-end justify-between gap-3 flex-wrap">
           <div className="min-w-0">
             <h1 className="h1">Dashboard</h1>
@@ -183,66 +214,104 @@ export default function DashboardPage() {
 
           <div className="flex items-center gap-2">
             <button
-              className="btn btn-ghost border"
+              className="btn btn-secondary"
               onClick={load}
               disabled={loading}
               title="Refresh"
+              type="button"
             >
               {loading ? "Refreshing…" : "Refresh"}
             </button>
           </div>
         </div>
 
-        {err && <div className="text-sm text-red-600">{err}</div>}
+        {err && <div className="text-sm text-red-400">{err}</div>}
 
         {!data && !err && (
-          <div className="subtle">{loading ? "Loading…" : "No data yet."}</div>
+          <div className="panel p-4">
+            <div className="h2">{loading ? "Loading…" : "No data yet."}</div>
+            <div className="subtle mt-1">
+              {activeStoreId ? "If this looks wrong, try Refresh." : "Select a store in the sidebar."}
+            </div>
+          </div>
         )}
 
         {data && (
           <>
-            {/* KPIs */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-              <div className="card card-pad">
-                <div className="subtle">Today • Gross</div>
-                <div className="kpi">₹{money(tenantToday?.grossRevenue?.value ?? 0)}</div>
-                <div className="mt-2">
-                  {deltaPill(
-                    tenantToday?.grossRevenue?.delta ?? 0,
-                    tenantToday?.grossRevenue?.deltaPct ?? 0
-                  )}
+            {/* KPI grid */}
+            <div className="card card-pad">
+              <div className="flex items-start justify-between gap-2 flex-wrap">
+                <div>
+                  <div className="h2">Overview</div>
+                  <div className="subtle mt-1">
+                    Today and month-to-date performance for the selected scope.
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="badge">Today</span>
+                  <span className="badge">This Month</span>
                 </div>
               </div>
 
-              <div className="card card-pad">
-                <div className="subtle">Today • Paid</div>
-                <div className="kpi">₹{money(tenantToday?.paidRevenue?.value ?? 0)}</div>
-                <div className="mt-2">
-                  {deltaPill(
-                    tenantToday?.paidRevenue?.delta ?? 0,
-                    tenantToday?.paidRevenue?.deltaPct ?? 0
-                  )}
-                </div>
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+                <StatCard
+                  label="Today • Gross"
+                  value={`₹${money(tenantToday?.grossRevenue?.value ?? 0)}`}
+                  delta={tenantToday?.grossRevenue?.delta ?? 0}
+                  deltaPctVal={tenantToday?.grossRevenue?.deltaPct ?? 0}
+                  hint="Total billed (before payment status)."
+                />
+
+                <StatCard
+                  label="Today • Paid"
+                  value={`₹${money(tenantToday?.paidRevenue?.value ?? 0)}`}
+                  delta={tenantToday?.paidRevenue?.delta ?? 0}
+                  deltaPctVal={tenantToday?.paidRevenue?.deltaPct ?? 0}
+                  hint="Collected amount for today."
+                />
+
+                <StatCard
+                  label="Today • Invoices"
+                  value={`${tenantToday?.invoiceCount?.value ?? 0}`}
+                  hint={`Unpaid: ${tenantToday?.unpaidCount?.value ?? 0}`}
+                />
+
+                <StatCard
+                  label="This Month • Gross"
+                  value={`₹${money(tenantMonth?.grossRevenue?.value ?? 0)}`}
+                  delta={tenantMonth?.grossRevenue?.delta ?? 0}
+                  deltaPctVal={tenantMonth?.grossRevenue?.deltaPct ?? 0}
+                  hint="Month-to-date billed revenue."
+                />
               </div>
 
-              <div className="card card-pad">
-                <div className="subtle">Today • Invoices</div>
-                <div className="kpi">{tenantToday?.invoiceCount?.value ?? 0}</div>
-                <div className="mt-2">
-                  <span className="text-xs text-gray-500">
-                    Unpaid: {tenantToday?.unpaidCount?.value ?? 0}
-                  </span>
+              {/* Secondary stats */}
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="surface-muted p-4">
+                  <div className="label">This Month • Paid Revenue</div>
+                  <div className="mt-1 text-xl font-semibold">
+                    ₹{money(tenantMonth?.paidRevenue?.value ?? 0)}
+                  </div>
+                  <div className="mt-2">
+                    <DeltaPill
+                      delta={tenantMonth?.paidRevenue?.delta ?? 0}
+                      deltaPctVal={tenantMonth?.paidRevenue?.deltaPct ?? 0}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div className="card card-pad">
-                <div className="subtle">This Month • Gross</div>
-                <div className="kpi">₹{money(tenantMonth?.grossRevenue?.value ?? 0)}</div>
-                <div className="mt-2">
-                  {deltaPill(
-                    tenantMonth?.grossRevenue?.delta ?? 0,
-                    tenantMonth?.grossRevenue?.deltaPct ?? 0
-                  )}
+                <div className="surface-muted p-4">
+                  <div className="label">This Month • Avg Invoice</div>
+                  <div className="mt-1 text-xl font-semibold">
+                    ₹{money(tenantMonth?.avgInvoiceValue?.value ?? 0)}
+                  </div>
+                  <div className="mt-2">
+                    <DeltaPill
+                      delta={tenantMonth?.avgInvoiceValue?.delta ?? 0}
+                      deltaPctVal={tenantMonth?.avgInvoiceValue?.deltaPct ?? 0}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -250,9 +319,7 @@ export default function DashboardPage() {
             {/* Quick Actions */}
             <div className="card card-pad">
               <div className="h2">Quick actions</div>
-              <div className="subtle mt-1">
-                Jump to the most-used pages.
-              </div>
+              <div className="subtle mt-1">Jump to the most-used pages.</div>
 
               <div className="mt-3 flex flex-wrap gap-2">
                 {canSeePatients && (
@@ -260,17 +327,25 @@ export default function DashboardPage() {
                     Patients
                   </Link>
                 )}
+
                 {canSeeInvoices && (
-                  <Link className="btn btn-ghost border" href="/invoices">
+                  <Link className="btn btn-secondary" href="/invoices">
                     Invoices
                   </Link>
                 )}
+
                 {canSeeInsights && (
-                  <Link className="btn btn-ghost border" href="/insights">
+                  <Link className="btn btn-outline" href="/insights">
                     Insights
                   </Link>
                 )}
               </div>
+
+              {!activeStoreId ? (
+                <div className="mt-3 text-xs muted">
+                  Tip: Select an active store from the sidebar to see accurate totals.
+                </div>
+              ) : null}
             </div>
           </>
         )}
