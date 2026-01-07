@@ -138,18 +138,24 @@ export default function PatientsPage() {
   return (
     <main className="p-4 md:p-6">
       <div className="page space-y-4">
-        {/* Header: stack on mobile, row on desktop */}
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        {/* Header */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="min-w-0">
             <h1 className="h1">Patients</h1>
-            <p className="subtle">
-              Search, add and manage patient records.
-            </p>
+            <p className="subtle">Search, add and manage patient records.</p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex gap-2 w-full md:w-auto">
             <button
-              className="bg-black text-white px-3 py-2 rounded-lg text-sm"
+              className="btn btn-ghost border w-full md:w-auto"
+              onClick={load}
+              disabled={loading}
+            >
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
+
+            <button
+              className="btn btn-primary w-full md:w-auto"
               onClick={() => setOpen(true)}
             >
               + Add Patient
@@ -158,24 +164,29 @@ export default function PatientsPage() {
         </div>
 
         {/* Search */}
-        <div className="flex flex-col gap-2 md:flex-row md:items-center">
-          <input
-            className="w-full border rounded-lg p-2"
-            placeholder="Search by name or mobile..."
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
+        <div className="card card-pad">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center">
+            <input
+              className="input"
+              placeholder="Search by name or mobile…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <div className="flex gap-2">
+              <button
+                className="btn btn-ghost border w-full md:w-auto"
+                onClick={() => setQ("")}
+                disabled={!q.trim()}
+                title="Clear search"
+              >
+                Clear
+              </button>
+              <div className="badge">{filtered.length} result(s)</div>
+            </div>
+          </div>
 
-          <button
-            className="border rounded-lg px-3 py-2 text-sm md:w-auto"
-            onClick={load}
-            disabled={loading}
-          >
-            {loading ? "Refreshing…" : "Refresh"}
-          </button>
+          {err && <div className="mt-3 text-sm text-red-600">{err}</div>}
         </div>
-
-        {err && <div className="text-sm text-red-600">{err}</div>}
 
         {/* Mobile cards */}
         <div className="md:hidden space-y-3">
@@ -184,10 +195,10 @@ export default function PatientsPage() {
           )}
 
           {filtered.map((p) => (
-            <div key={p.id} className="border rounded-2xl bg-white p-3">
+            <div key={p.id} className="card card-pad">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="font-medium truncate">{p.name}</div>
+                  <div className="font-semibold truncate">{p.name}</div>
                   <div className="mt-1 text-xs text-gray-600">
                     {p.mobile ? `📞 ${p.mobile}` : "—"}
                     {p.gender ? ` • ${p.gender}` : ""}
@@ -195,7 +206,7 @@ export default function PatientsPage() {
                   </div>
                 </div>
 
-                <Link className="underline text-sm shrink-0" href={`/patients/${p.id}`}>
+                <Link className="btn btn-ghost border shrink-0" href={`/patients/${p.id}`}>
                   Open
                 </Link>
               </div>
@@ -203,15 +214,15 @@ export default function PatientsPage() {
           ))}
 
           {!loading && filtered.length === 0 && (
-            <div className="p-4 text-sm text-gray-500 border rounded-2xl bg-white">
+            <div className="card card-pad text-sm text-gray-500">
               No patients yet for this store.
             </div>
           )}
         </div>
 
-        {/* Desktop list */}
-        <div className="hidden md:block border rounded-xl overflow-hidden bg-white">
-          <div className="grid grid-cols-12 bg-gray-50 text-sm font-medium p-3">
+        {/* Desktop table */}
+        <div className="hidden md:block table">
+          <div className="table-head grid-cols-12 p-3">
             <div className="col-span-5">Name</div>
             <div className="col-span-4">Details</div>
             <div className="col-span-3 text-right">Action</div>
@@ -222,7 +233,10 @@ export default function PatientsPage() {
           )}
 
           {filtered.map((p) => (
-            <div key={p.id} className="grid grid-cols-12 p-3 text-sm border-t items-center">
+            <div
+              key={p.id}
+              className="table-row grid-cols-12 p-3 items-center"
+            >
               <div className="col-span-5 min-w-0">
                 <div className="font-medium truncate">{p.name}</div>
               </div>
@@ -236,7 +250,7 @@ export default function PatientsPage() {
               </div>
 
               <div className="col-span-3 text-right">
-                <Link className="underline text-sm" href={`/patients/${p.id}`}>
+                <Link className="btn btn-ghost border" href={`/patients/${p.id}`}>
                   Open
                 </Link>
               </div>
@@ -244,37 +258,42 @@ export default function PatientsPage() {
           ))}
 
           {!loading && filtered.length === 0 && (
-            <div className="p-6 text-gray-500">No patients yet for this store.</div>
+            <div className="p-6 text-gray-500">
+              No patients yet for this store.
+            </div>
           )}
         </div>
 
         {/* Modal */}
         {open && (
           <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-            <div className="bg-white w-full max-w-md rounded-2xl p-4 shadow max-h-[85vh] overflow-auto">
+            <div className="bg-white w-full max-w-md rounded-2xl p-4 shadow max-h-[85vh] overflow-auto space-y-3">
               <div className="flex justify-between items-center gap-3">
-                <h2 className="font-semibold">Add Patient</h2>
+                <h2 className="text-lg font-semibold">Add Patient</h2>
                 <button
-                  className="underline text-sm"
+                  className="btn btn-ghost border"
                   onClick={() => {
                     setOpen(false);
                     setErr(null);
                   }}
+                  disabled={saving}
                 >
                   Close
                 </button>
               </div>
 
-              <div className="mt-3 space-y-3">
+              {err && <div className="text-sm text-red-600">{err}</div>}
+
+              <div className="space-y-3">
                 <input
-                  className="w-full border rounded-lg p-2"
+                  className="input"
                   placeholder="Name *"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                 />
 
                 <input
-                  className="w-full border rounded-lg p-2"
+                  className="input"
                   placeholder="Mobile"
                   value={mobile}
                   onChange={(e) => setMobile(e.target.value)}
@@ -282,14 +301,14 @@ export default function PatientsPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <input
-                    className="w-full border rounded-lg p-2"
+                    className="input"
                     placeholder="Age"
                     value={age}
                     onChange={(e) => setAge(e.target.value)}
                   />
 
                   <select
-                    className="w-full border rounded-lg p-2"
+                    className="input"
                     value={gender}
                     onChange={(e) => setGender(e.target.value)}
                   >
@@ -300,7 +319,7 @@ export default function PatientsPage() {
                 </div>
 
                 <input
-                  className="w-full border rounded-lg p-2"
+                  className="input"
                   placeholder="Address"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
@@ -308,7 +327,7 @@ export default function PatientsPage() {
 
                 <div className="flex gap-2">
                   <button
-                    className="w-full bg-black text-white rounded-lg p-2 disabled:opacity-60"
+                    className="btn btn-primary w-full disabled:opacity-60"
                     disabled={!name.trim() || saving}
                     onClick={createPatient}
                   >
@@ -316,13 +335,14 @@ export default function PatientsPage() {
                   </button>
 
                   <button
-                    className="w-full border rounded-lg p-2"
+                    className="btn btn-ghost border w-full"
                     onClick={() => {
                       setOpen(false);
                       resetForm();
                       setErr(null);
                     }}
                     type="button"
+                    disabled={saving}
                   >
                     Cancel
                   </button>

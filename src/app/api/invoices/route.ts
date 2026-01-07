@@ -24,9 +24,10 @@ async function requireUser(req: NextRequest) {
   });
   if (!user) throw new Error("User not found");
 
-  // For SHOP_OWNER, we allow all stores in the tenant
+  // allowed store ids
   let allowedStoreIds = (user.stores ?? []).map((s) => s.storeId);
 
+  // SHOP_OWNER gets all stores in tenant
   if (user.role === "SHOP_OWNER") {
     const allStores = await prisma.store.findMany({
       where: { tenantId: user.tenantId },
@@ -48,8 +49,15 @@ function safeNumber(v: any) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function computePaymentStatus(total: number, amountPaid: number) {
+  if (amountPaid <= 0) return "Unpaid";
+  if (amountPaid >= total) return "Paid";
+  return "Partial";
+}
+
 // GET /api/invoices?patientId=...&storeId=...
 // patientId OPTIONAL
+// storeId OPTIONAL
 // storeId can be "all" for SHOP_OWNER
 export async function GET(req: NextRequest) {
   try {
@@ -60,19 +68,29 @@ export async function GET(req: NextRequest) {
     const storeIdParam = url.searchParams.get("storeId");
 
     const isOwner = user.role === "SHOP_OWNER";
-    const isAllStores = isOwner && storeIdParam === "all";
+    const wantsAllStores = isOwner && storeIdParam === "all";
 
-    // Store scope
-    let storeWhere: any = undefined;
+    /**
+     * IMPORTANT FIX:
+     * If patientId is provided and storeIdParam is NOT provided,
+     * we should return invoices across ALL stores the user can access.
+     * Otherwise, the patient page may not see the invoice and shows "No Invoice".
+     */
+    let storeWhere: any;
 
-    if (isAllStores) {
+    if (wantsAllStores) {
       storeWhere = { in: user.allowedStoreIds };
     } else if (storeIdParam) {
+      // explicit store filter
       if (!user.allowedStoreIds.includes(storeIdParam)) {
         return NextResponse.json({ error: "No store access" }, { status: 403 });
       }
       storeWhere = storeIdParam;
+    } else if (patientId) {
+      // patient scoped view: show across all allowed stores
+      storeWhere = { in: user.allowedStoreIds };
     } else {
+      // list page default (no patient filter): show first allowed store
       if (!user.allowedStoreIds.length) {
         return NextResponse.json({ error: "No store access" }, { status: 403 });
       }
@@ -84,21 +102,19 @@ export async function GET(req: NextRequest) {
       ...(storeWhere ? { storeId: storeWhere } : {}),
     };
 
-    // Optional patient filter
     if (patientId) {
       const patient = await prisma.patient.findFirst({
         where: { id: patientId, tenantId: user.tenantId },
         select: { id: true },
       });
       if (!patient) return NextResponse.json({ error: "Patient not found" }, { status: 404 });
-
       where.patientId = patientId;
     }
 
     const invoices = await prisma.invoice.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: patientId ? 200 : 100, // list page: limit to recent; patient view: allow more
+      take: patientId ? 200 : 100,
       include: {
         patient: { select: { id: true, name: true, mobile: true } },
         store: { select: { id: true, name: true, city: true } },
@@ -130,13 +146,10 @@ export async function POST(req: NextRequest) {
 
     const discount = safeNumber(body.discount);
     const paid = Boolean(body.paid);
-    const paymentMode = String(body.paymentMode ?? "Cash");
+    const paymentMode = String(body.paymentMode ?? "Cash").trim() || "Cash";
 
     if (!patientId || !storeId || !orderId) {
-      return NextResponse.json(
-        { error: "patientId, storeId, orderId are required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "patientId, storeId, orderId are required" }, { status: 400 });
     }
 
     if (!user.allowedStoreIds.includes(storeId)) {
@@ -154,6 +167,19 @@ export async function POST(req: NextRequest) {
     });
     if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
+    /**
+     * IMPORTANT FIX:
+     * If invoice already exists for this orderId, return it instead of error.
+     * This makes "Generate Invoice" idempotent and avoids unique constraint crashes.
+     */
+    const existing = await prisma.invoice.findFirst({
+      where: { tenantId: user.tenantId, orderId },
+    });
+
+    if (existing) {
+      return NextResponse.json({ invoice: existing });
+    }
+
     const items = getOrderItems(order.itemsJson);
     const subTotal = items.reduce((sum: number, it: any) => {
       const qty = safeNumber(it.qty);
@@ -162,7 +188,11 @@ export async function POST(req: NextRequest) {
     }, 0);
 
     const disc = safeNumber(discount);
-    const grandTotal = Math.max(0, subTotal - disc);
+    const total = Math.max(0, subTotal - disc);
+
+    // Payment fields (consistent with your PATCH route / UI)
+    const amountPaid = paid ? total : 0;
+    const paymentStatus = computePaymentStatus(total, amountPaid);
 
     const invoiceNo = `INV-${Date.now()}`; // prototype
 
@@ -177,11 +207,13 @@ export async function POST(req: NextRequest) {
           items,
           subTotal,
           discount: disc,
-          total: grandTotal,
-          paid,
-          paymentMode: paymentMode || "Cash",
+          total,
+          amountPaid,
+          paymentMode,
+          paymentStatus,
         },
-        paymentStatus: paid ? "Paid" : "Unpaid",
+        // keep if your schema has invoice.paymentStatus
+        paymentStatus,
       },
     });
 
