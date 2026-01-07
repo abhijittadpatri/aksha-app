@@ -1,30 +1,33 @@
+// src/lib/whatsapp.ts
+
+export type InvoicePaymentStatus = "PAID" | "UNPAID" | "PARTIAL";
+
 export function buildInvoiceWhatsAppMessage(input: {
   clinicOrStoreName: string;
   patientName: string;
   invoiceNo: string;
   amount: number;
-  paymentStatus: "PAID" | "UNPAID";
-  invoiceUrl: string;
+  paymentStatus: InvoicePaymentStatus;
+  invoiceUrl?: string;
 }) {
-  const amountINR = new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(input.amount || 0);
+  const { clinicOrStoreName, patientName, invoiceNo, amount, paymentStatus, invoiceUrl } = input;
 
-  const statusText = input.paymentStatus === "PAID" ? "Paid ✅" : "Pending ❗";
+  const statusLabel =
+    paymentStatus === "PAID"
+      ? "PAID"
+      : paymentStatus === "PARTIAL"
+      ? "PARTIALLY PAID"
+      : "UNPAID";
 
-  // Professional, short, clinic-friendly
-  return [
-    `Hello ${input.patientName},`,
-    ``,
-    `Thank you for visiting *${input.clinicOrStoreName}*.`,
-    `Invoice *${input.invoiceNo}* • Amount *${amountINR}* • Status: *${statusText}*`,
-    ``,
-    `You can view/print your invoice here:`,
-    `${input.invoiceUrl}`,
-    ``,
-    `Regards,`,
-    `${input.clinicOrStoreName}`,
-  ].join("\n");
+  const lines = [
+    `*${clinicOrStoreName}*`,
+    `Hi ${patientName},`,
+    `Invoice: *${invoiceNo}*`,
+    `Amount: *₹${amount.toFixed(2)}*`,
+    `Status: *${statusLabel}*`,
+  ];
+
+  if (invoiceUrl) lines.push(`Link: ${invoiceUrl}`);
+
+  return lines.join("\n");
 }

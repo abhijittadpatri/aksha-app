@@ -96,7 +96,8 @@ export default function InvoicePage() {
     const invoiceNo = invoice.invoiceNo ?? "Invoice";
     const amount = Number(invoice.totalsJson?.total ?? 0);
     const psRaw = String(invoice.paymentStatus ?? "Unpaid").toLowerCase();
-    const paymentStatus = psRaw === "paid" ? "PAID" : psRaw === "partial" ? "PARTIAL" : "UNPAID";
+    const paymentStatus =
+      psRaw === "paid" ? "PAID" : psRaw === "partial" ? "PARTIAL" : "UNPAID";
 
     return buildInvoiceWhatsAppMessage({
       clinicOrStoreName,
