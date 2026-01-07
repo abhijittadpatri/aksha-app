@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Modal from "@/components/ui/Modal";
 
 function cls(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
@@ -98,7 +99,6 @@ export default function StoresPage() {
     setErr(null);
     setLoading(true);
     try {
-      // ✅ IMPORTANT: request all stores, including disabled
       const res = await fetch("/api/stores?all=1", { credentials: "include" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -122,10 +122,7 @@ export default function StoresPage() {
   async function createStore() {
     setErr(null);
     const nm = name.trim();
-    if (!nm) {
-      setErr("Store name is required");
-      return;
-    }
+    if (!nm) return setErr("Store name is required");
 
     setSaving(true);
     try {
@@ -141,10 +138,7 @@ export default function StoresPage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setErr(data.error ?? "Failed to create store");
-        return;
-      }
+      if (!res.ok) return setErr(data.error ?? "Failed to create store");
 
       setOpen(false);
       setName("");
@@ -164,7 +158,6 @@ export default function StoresPage() {
 
   async function submitStatusChange() {
     if (!sdStore) return;
-
     const nextIsActive = !sdStore.isActive;
 
     setSdSaving(true);
@@ -178,10 +171,7 @@ export default function StoresPage() {
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setSdErr(data.error ?? "Failed to update store");
-        return;
-      }
+      if (!res.ok) return setSdErr(data.error ?? "Failed to update store");
 
       setSdOpen(false);
       setSdStore(null);
@@ -195,11 +185,9 @@ export default function StoresPage() {
 
   const filteredStores = useMemo(() => {
     const needle = q.trim().toLowerCase();
-
     return (stores ?? []).filter((s) => {
       if (statusFilter === "active" && !s.isActive) return false;
       if (statusFilter === "disabled" && s.isActive) return false;
-
       if (!needle) return true;
 
       const hay = [s.name ?? "", s.city ?? "", s.address ?? "", String(s.id ?? "")]
@@ -217,8 +205,7 @@ export default function StoresPage() {
     return { all, active, disabled };
   }, [stores]);
 
-  const filterBtn = (active: boolean) =>
-    cls("btn btn-sm", active ? "btn-soft" : "btn-secondary");
+  const filterBtn = (active: boolean) => cls("btn btn-sm", active ? "btn-soft" : "btn-secondary");
 
   return (
     <main className="p-4 md:p-6">
@@ -231,17 +218,40 @@ export default function StoresPage() {
           </div>
 
           <div className="flex gap-2 w-full md:w-auto">
-            <button className="btn btn-secondary w-full md:w-auto" onClick={load} disabled={loading} type="button">
+            <button
+              className="btn btn-secondary w-full md:w-auto"
+              onClick={load}
+              disabled={loading}
+              type="button"
+            >
               {loading ? "Refreshing…" : "Refresh"}
             </button>
 
-            <button className="btn btn-primary w-full md:w-auto" onClick={() => setOpen(true)} type="button">
+            <button
+              className="btn btn-primary w-full md:w-auto"
+              onClick={() => setOpen(true)}
+              type="button"
+            >
               + Add Store
             </button>
           </div>
         </div>
 
-        {err && <div className="text-sm text-red-600">{err}</div>}
+        {/* Page error */}
+        {err && (
+          <div
+            className="text-sm"
+            style={{
+              color: "rgb(var(--fg))",
+              background: "rgba(var(--danger),0.14)",
+              border: "1px solid rgba(var(--danger),0.22)",
+              borderRadius: "12px",
+              padding: "10px 12px",
+            }}
+          >
+            {err}
+          </div>
+        )}
 
         {/* Controls */}
         <div className="card card-pad space-y-3">
@@ -308,9 +318,7 @@ export default function StoresPage() {
             </div>
           ))}
 
-          {filteredStores.length === 0 && (
-            <div className="panel p-4 text-sm muted">No stores found.</div>
-          )}
+          {filteredStores.length === 0 && <div className="panel p-4 text-sm muted">No stores found.</div>}
         </div>
 
         {/* Desktop table */}
@@ -349,129 +357,155 @@ export default function StoresPage() {
           {filteredStores.length === 0 && <div className="p-4 text-sm muted">No stores found.</div>}
         </div>
 
-        {/* Enable/Disable Modal */}
-        {sdOpen && sdStore && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop" role="dialog" aria-modal="true">
-            <div className="modal w-full max-w-md">
-              <div className="card-pad space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="text-lg font-semibold truncate">{sdStore.isActive ? "Disable Store" : "Enable Store"}</div>
-                    <div className="text-xs muted truncate">
-                      {sdStore.name} • {sdStore.city ?? "—"}
-                    </div>
-                  </div>
+        {/* Enable/Disable Modal (standard shell) */}
+        <Modal
+          open={sdOpen && !!sdStore}
+          onClose={() => {
+            if (sdSaving) return;
+            setSdOpen(false);
+            setSdStore(null);
+            setSdErr(null);
+          }}
+          title={sdStore?.isActive ? "Disable Store" : "Enable Store"}
+          description={
+            sdStore ? (
+              <>
+                {sdStore.name} • {sdStore.city ?? "—"}
+              </>
+            ) : null
+          }
+          size="md"
+          busy={sdSaving}
+          footer={
+            <div className="flex gap-2">
+              <button
+                className="btn btn-secondary flex-1"
+                type="button"
+                onClick={() => {
+                  if (sdSaving) return;
+                  setSdOpen(false);
+                  setSdStore(null);
+                  setSdErr(null);
+                }}
+                disabled={sdSaving}
+              >
+                Cancel
+              </button>
 
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    type="button"
-                    onClick={() => {
-                      if (sdSaving) return;
-                      setSdOpen(false);
-                      setSdErr(null);
-                    }}
-                  >
-                    Close
-                  </button>
-                </div>
-
-                <div className="text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
-                  {sdStore.isActive ? (
-                    <>
-                      This store will be marked as <span className="font-medium" style={{ color: "rgb(var(--fg))" }}>Disabled</span>.
-                      Disabled stores won’t appear in store selection dropdowns (pickers).
-                    </>
-                  ) : (
-                    <>
-                      This store will be marked as <span className="font-medium" style={{ color: "rgb(var(--fg))" }}>Active</span> and will appear in store
-                      selection dropdowns.
-                    </>
-                  )}
-                </div>
-
-                {sdErr && <div className="text-sm text-red-600">{sdErr}</div>}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    className="btn btn-secondary flex-1"
-                    type="button"
-                    onClick={() => {
-                      if (sdSaving) return;
-                      setSdOpen(false);
-                      setSdStore(null);
-                    }}
-                    disabled={sdSaving}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    className={cls("btn flex-1", sdStore.isActive ? "btn-danger" : "btn-primary")}
-                    type="button"
-                    onClick={submitStatusChange}
-                    disabled={sdSaving}
-                  >
-                    {sdSaving ? "Saving..." : sdStore.isActive ? "Disable" : "Enable"}
-                  </button>
-                </div>
+              <button
+                className={cls("btn flex-1", sdStore?.isActive ? "btn-danger" : "btn-primary")}
+                type="button"
+                onClick={submitStatusChange}
+                disabled={sdSaving}
+              >
+                {sdSaving ? "Saving…" : sdStore?.isActive ? "Disable" : "Enable"}
+              </button>
+            </div>
+          }
+        >
+          {sdStore ? (
+            <>
+              <div className="text-sm subtle">
+                {sdStore.isActive ? (
+                  <>
+                    This store will be marked as <span className="font-medium" style={{ color: "rgb(var(--fg))" }}>Disabled</span>.
+                    Disabled stores won’t appear in store selection dropdowns.
+                  </>
+                ) : (
+                  <>
+                    This store will be marked as <span className="font-medium" style={{ color: "rgb(var(--fg))" }}>Active</span> and will appear in store
+                    selection dropdowns.
+                  </>
+                )}
               </div>
+
+              {sdErr && (
+                <div
+                  className="mt-3 text-sm"
+                  style={{
+                    color: "rgb(var(--fg))",
+                    background: "rgba(var(--danger),0.14)",
+                    border: "1px solid rgba(var(--danger),0.22)",
+                    borderRadius: "12px",
+                    padding: "10px 12px",
+                  }}
+                >
+                  {sdErr}
+                </div>
+              )}
+
+              {sdStore.disabledAt && !sdStore.isActive ? (
+                <div className="mt-3 text-[11px] subtle">Disabled at: {safeDate(sdStore.disabledAt)}</div>
+              ) : null}
+            </>
+          ) : null}
+        </Modal>
+
+        {/* Create Store Modal (standard shell) */}
+        <Modal
+          open={open}
+          onClose={() => {
+            if (saving) return;
+            setOpen(false);
+          }}
+          title="Create Store"
+          description="Add a new store location."
+          size="lg"
+          busy={saving}
+          footer={
+            <div className="flex gap-2">
+              <button className="btn btn-secondary flex-1" type="button" onClick={() => setOpen(false)} disabled={saving}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary flex-1"
+                type="button"
+                onClick={createStore}
+                disabled={saving || !name.trim()}
+              >
+                {saving ? "Creating…" : "Create Store"}
+              </button>
+            </div>
+          }
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <div className="label mb-1">Store Name *</div>
+              <input
+                className="input"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="e.g., Aksha Banjara Hills"
+              />
+            </div>
+
+            <div>
+              <div className="label mb-1">City</div>
+              <input className="input" value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g., Hyderabad" />
+            </div>
+
+            <div className="md:col-span-2">
+              <div className="label mb-1">Address</div>
+              <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Optional" />
             </div>
           </div>
-        )}
 
-        {/* Create store modal */}
-        {open && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 modal-backdrop" role="dialog" aria-modal="true">
-            <div className="modal w-full max-w-xl">
-              <div className="card-pad space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2 className="text-lg font-semibold">Create Store</h2>
-                    <div className="text-xs muted">Add a new store location.</div>
-                  </div>
-
-                  <button className="btn btn-ghost btn-sm" type="button" onClick={() => setOpen(false)} disabled={saving}>
-                    Close
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <div className="label mb-1">Store Name *</div>
-                    <input
-                      className="input"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g., Aksha Banjara Hills"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="label mb-1">City</div>
-                    <input className="input" value={city} onChange={(e) => setCity(e.target.value)} placeholder="e.g., Hyderabad" />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <div className="label mb-1">Address</div>
-                    <input className="input" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Optional" />
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button className="btn btn-secondary w-full" type="button" onClick={() => setOpen(false)} disabled={saving}>
-                    Cancel
-                  </button>
-
-                  <button className="btn btn-primary w-full" type="button" onClick={createStore} disabled={saving || !name.trim()}>
-                    {saving ? "Creating..." : "Create Store"}
-                  </button>
-                </div>
-
-                {err && <div className="text-sm text-red-600">{err}</div>}
-              </div>
+          {/* keep modal-local errors separate from page-level errors */}
+          {err && (
+            <div
+              className="mt-3 text-sm"
+              style={{
+                color: "rgb(var(--fg))",
+                background: "rgba(var(--danger),0.14)",
+                border: "1px solid rgba(var(--danger),0.22)",
+                borderRadius: "12px",
+                padding: "10px 12px",
+              }}
+            >
+              {err}
             </div>
-          </div>
-        )}
+          )}
+        </Modal>
       </div>
     </main>
   );

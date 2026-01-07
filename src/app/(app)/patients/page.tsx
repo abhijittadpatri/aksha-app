@@ -1,7 +1,9 @@
+// src/app/(app)/patients/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import Modal from "@/components/ui/Modal";
 
 type Patient = {
   id: string;
@@ -92,10 +94,7 @@ export default function PatientsPage() {
     setErr(null);
     if (!activeStoreId) return;
 
-    if (!name.trim()) {
-      setErr("Name is required");
-      return;
-    }
+    if (!name.trim()) return setErr("Name is required");
 
     setSaving(true);
     try {
@@ -116,10 +115,7 @@ export default function PatientsPage() {
       const text = await res.text();
       const data = safeJson(text);
 
-      if (!res.ok) {
-        setErr(data.error ?? "Failed to create patient");
-        return;
-      }
+      if (!res.ok) return setErr(data.error ?? "Failed to create patient");
 
       setOpen(false);
       resetForm();
@@ -146,13 +142,18 @@ export default function PatientsPage() {
               className="btn btn-secondary w-full md:w-auto"
               onClick={load}
               disabled={loading}
+              type="button"
             >
               {loading ? "Refreshing…" : "Refresh"}
             </button>
 
             <button
               className="btn btn-primary w-full md:w-auto"
-              onClick={() => setOpen(true)}
+              onClick={() => {
+                setErr(null);
+                setOpen(true);
+              }}
+              type="button"
             >
               + Add Patient
             </button>
@@ -168,25 +169,43 @@ export default function PatientsPage() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
+
             <div className="flex gap-2">
               <button
                 className="btn btn-secondary"
                 onClick={() => setQ("")}
                 disabled={!q.trim()}
+                type="button"
               >
                 Clear
               </button>
+
               <span className="badge">{filtered.length} result(s)</span>
             </div>
           </div>
 
           {err && (
-            <div className="mt-3 text-sm text-red-400">{err}</div>
+            <div
+              className="mt-3 text-sm"
+              style={{
+                color: "rgb(var(--fg))",
+                background: "rgba(var(--danger),0.14)",
+                border: "1px solid rgba(var(--danger),0.22)",
+                borderRadius: "12px",
+                padding: "10px 12px",
+              }}
+            >
+              {err}
+            </div>
           )}
         </div>
 
         {/* Mobile cards */}
         <div className="md:hidden space-y-3">
+          {loading && filtered.length === 0 && !err && (
+            <div className="text-sm subtle">Loading patients…</div>
+          )}
+
           {filtered.map((p) => (
             <div key={p.id} className="panel p-4">
               <div className="flex items-start justify-between gap-3">
@@ -210,9 +229,7 @@ export default function PatientsPage() {
           ))}
 
           {!loading && filtered.length === 0 && (
-            <div className="panel p-4 text-sm muted">
-              No patients yet for this store.
-            </div>
+            <div className="panel p-4 text-sm muted">No patients yet for this store.</div>
           )}
         </div>
 
@@ -224,13 +241,14 @@ export default function PatientsPage() {
             <div className="col-span-3 text-right">Action</div>
           </div>
 
+          {loading && filtered.length === 0 && !err && (
+            <div className="p-4 text-sm muted">Loading patients…</div>
+          )}
+
           {filtered.map((p) => (
-            <div
-              key={p.id}
-              className="table-row grid-cols-12 p-3 items-center"
-            >
-              <div className="col-span-5 truncate font-medium">
-                {p.name}
+            <div key={p.id} className="table-row grid-cols-12 p-3 items-center">
+              <div className="col-span-5 min-w-0">
+                <div className="font-medium truncate">{p.name}</div>
               </div>
 
               <div className="col-span-4 text-xs muted truncate">
@@ -240,10 +258,7 @@ export default function PatientsPage() {
               </div>
 
               <div className="col-span-3 text-right">
-                <Link
-                  className="btn btn-secondary btn-sm"
-                  href={`/patients/${p.id}`}
-                >
+                <Link className="btn btn-secondary btn-sm" href={`/patients/${p.id}`}>
                   Open
                 </Link>
               </div>
@@ -251,103 +266,106 @@ export default function PatientsPage() {
           ))}
 
           {!loading && filtered.length === 0 && (
-            <div className="p-6 muted">
-              No patients yet for this store.
-            </div>
+            <div className="p-6 muted">No patients yet for this store.</div>
           )}
         </div>
 
-        {/* Modal */}
-        {open && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-            <div className="card card-pad w-full max-w-md space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="text-lg font-semibold">Add Patient</h2>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => {
-                    setOpen(false);
-                    setErr(null);
-                  }}
-                  disabled={saving}
-                >
-                  Close
-                </button>
-              </div>
+        {/* Add Patient (Standard Modal Shell) */}
+        <Modal
+          open={open}
+          onClose={() => {
+            if (saving) return;
+            setOpen(false);
+            setErr(null);
+          }}
+          title="Add Patient"
+          description="Create a new patient record."
+          size="md"
+          busy={saving}
+          footer={
+            <div className="flex gap-2">
+              <button
+                className="btn btn-secondary flex-1"
+                type="button"
+                onClick={() => {
+                  if (saving) return;
+                  setOpen(false);
+                  resetForm();
+                  setErr(null);
+                }}
+                disabled={saving}
+              >
+                Cancel
+              </button>
 
-              {err && <div className="text-sm text-red-400">{err}</div>}
-
-              <div className="space-y-3">
-                <input
-                  className="input"
-                  placeholder="Name *"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-
-                <input
-                  className="input"
-                  placeholder="Mobile"
-                  value={mobile}
-                  onChange={(e) => setMobile(e.target.value)}
-                />
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    className="input"
-                    placeholder="Age"
-                    value={age}
-                    onChange={(e) => setAge(e.target.value)}
-                  />
-
-                  <select
-                    className="input"
-                    value={gender}
-                    onChange={(e) => setGender(e.target.value)}
-                  >
-                    <option>Male</option>
-                    <option>Female</option>
-                    <option>Other</option>
-                  </select>
-                </div>
-
-                <input
-                  className="input"
-                  placeholder="Address"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                />
-
-                <div className="flex gap-2">
-                  <button
-                    className="btn btn-primary w-full"
-                    disabled={!name.trim() || saving}
-                    onClick={createPatient}
-                  >
-                    {saving ? "Saving…" : "Save Patient"}
-                  </button>
-
-                  <button
-                    className="btn btn-secondary w-full"
-                    onClick={() => {
-                      setOpen(false);
-                      resetForm();
-                      setErr(null);
-                    }}
-                    type="button"
-                    disabled={saving}
-                  >
-                    Cancel
-                  </button>
-                </div>
-
-                <div className="text-xs muted">
-                  Tip: Search supports name + mobile.
-                </div>
-              </div>
+              <button
+                className="btn btn-primary flex-1"
+                type="button"
+                disabled={!name.trim() || saving}
+                onClick={createPatient}
+              >
+                {saving ? "Saving…" : "Save Patient"}
+              </button>
             </div>
+          }
+        >
+          {err && (
+            <div
+              className="text-sm"
+              style={{
+                color: "rgb(var(--fg))",
+                background: "rgba(var(--danger),0.14)",
+                border: "1px solid rgba(var(--danger),0.22)",
+                borderRadius: "12px",
+                padding: "10px 12px",
+              }}
+            >
+              {err}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <input
+              className="input"
+              placeholder="Name *"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+
+            <input
+              className="input"
+              placeholder="Mobile"
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value)}
+              inputMode="tel"
+            />
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input
+                className="input"
+                placeholder="Age"
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                inputMode="numeric"
+              />
+
+              <select className="input" value={gender} onChange={(e) => setGender(e.target.value)}>
+                <option>Male</option>
+                <option>Female</option>
+                <option>Other</option>
+              </select>
+            </div>
+
+            <input
+              className="input"
+              placeholder="Address"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+            />
+
+            <div className="text-xs muted">Tip: Search supports name + mobile.</div>
           </div>
-        )}
+        </Modal>
       </div>
     </main>
   );

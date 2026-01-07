@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import Modal from "@/components/ui/Modal";
 
 /**
  * Patient Detail Page (Dark SaaS)
@@ -851,7 +852,7 @@ export default function PatientDetailPage() {
                   <button className="btn btn-secondary" type="button" onClick={loadPrescriptions}>
                     Refresh
                   </button>
-                  <button className="btn btn-primary" type="button" onClick={() => setRxOpen(true)}>
+                  <button className="btn btn-secondary btn-sm" type="button" onClick={() => setRxOpen(true)}>
                     + Add Rx
                   </button>
                 </div>
@@ -990,7 +991,7 @@ export default function PatientDetailPage() {
                               >
                                 Open Invoice
                               </button>
-                              <button className="btn btn-primary btn-sm" type="button" onClick={() => openPaymentModal(inv)}>
+                              <button className="btn btn-secondary btn-sm" type="button" onClick={() => openPaymentModal(inv)}>
                                 Record Payment
                               </button>
                             </>
@@ -1129,254 +1130,246 @@ export default function PatientDetailPage() {
         </div>
 
         {/* ================= Rx Modal ================= */}
-        {rxOpen && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-            <div className="card w-full max-w-3xl card-pad max-h-[85vh] overflow-auto space-y-4">
-              <div className="flex justify-between items-center sticky top-0 pb-2" style={{ background: "rgb(var(--panel))" }}>
-                <div>
-                  <h2 className="text-lg font-semibold">New Prescription</h2>
-                  <div className="text-xs muted">Single form • OD & OS sections • Copy between eyes</div>
-                </div>
+        
+        <Modal
+  open={rxOpen}
+  onClose={() => {
+    if (rxSaving) return;
+    setRxOpen(false);
+    setRxErr(null);
+  }}
+  title="New Prescription"
+  description="Single form • OD & OS sections • Copy between eyes"
+  size="xl"
+  busy={rxSaving}
+  footer={
+    <div className="flex flex-col sm:flex-row gap-2">
+      <button
+        className="btn btn-secondary w-full"
+        type="button"
+        onClick={() => {
+          if (rxSaving) return;
+          resetRxForm();
+          setRxErr(null);
+        }}
+        disabled={rxSaving}
+      >
+        Clear
+      </button>
 
-                <button
-                  className="btn btn-ghost btn-sm"
-                  type="button"
-                  onClick={() => {
-                    if (rxSaving) return;
-                    setRxOpen(false);
-                    setRxErr(null);
-                  }}
-                >
-                  Close
-                </button>
-              </div>
+      <button
+        className="btn btn-primary w-full"
+        type="button"
+        onClick={createPrescription}
+        disabled={rxSaving}
+      >
+        {rxSaving ? "Saving..." : "Save Prescription"}
+      </button>
+    </div>
+  }
+>
+  {rxErr && <div className="text-sm text-red-400 mb-3">{rxErr}</div>}
 
-              {rxErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{rxErr}</div>}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div className="panel p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-medium">Right Eye (OD)</div>
+        <button className="btn btn-secondary btn-sm" type="button" onClick={copyRightToLeft}>
+          Copy → Left
+        </button>
+      </div>
+      <input className="input" placeholder="Sphere" value={rSphere} onChange={(e) => setRSphere(e.target.value)} />
+      <input className="input" placeholder="Cyl" value={rCyl} onChange={(e) => setRCyl(e.target.value)} />
+      <input className="input" placeholder="Axis" value={rAxis} onChange={(e) => setRAxis(e.target.value)} />
+      <input className="input" placeholder="Add" value={rAdd} onChange={(e) => setRAdd(e.target.value)} />
+    </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="panel p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-medium">Right Eye (OD)</div>
-                    <button className="btn btn-secondary btn-sm" type="button" onClick={copyRightToLeft}>
-                      Copy → Left
-                    </button>
-                  </div>
-                  <input className="input" placeholder="Sphere" value={rSphere} onChange={(e) => setRSphere(e.target.value)} />
-                  <input className="input" placeholder="Cyl" value={rCyl} onChange={(e) => setRCyl(e.target.value)} />
-                  <input className="input" placeholder="Axis" value={rAxis} onChange={(e) => setRAxis(e.target.value)} />
-                  <input className="input" placeholder="Add" value={rAdd} onChange={(e) => setRAdd(e.target.value)} />
-                </div>
+    <div className="panel p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-medium">Left Eye (OS)</div>
+        <button className="btn btn-secondary btn-sm" type="button" onClick={copyLeftToRight}>
+          Copy → Right
+        </button>
+      </div>
+      <input className="input" placeholder="Sphere" value={lSphere} onChange={(e) => setLSphere(e.target.value)} />
+      <input className="input" placeholder="Cyl" value={lCyl} onChange={(e) => setLCyl(e.target.value)} />
+      <input className="input" placeholder="Axis" value={lAxis} onChange={(e) => setLAxis(e.target.value)} />
+      <input className="input" placeholder="Add" value={lAdd} onChange={(e) => setLAdd(e.target.value)} />
+    </div>
+  </div>
 
-                <div className="panel p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-medium">Left Eye (OS)</div>
-                    <button className="btn btn-secondary btn-sm" type="button" onClick={copyLeftToRight}>
-                      Copy → Right
-                    </button>
-                  </div>
-                  <input className="input" placeholder="Sphere" value={lSphere} onChange={(e) => setLSphere(e.target.value)} />
-                  <input className="input" placeholder="Cyl" value={lCyl} onChange={(e) => setLCyl(e.target.value)} />
-                  <input className="input" placeholder="Axis" value={lAxis} onChange={(e) => setLAxis(e.target.value)} />
-                  <input className="input" placeholder="Add" value={lAdd} onChange={(e) => setLAdd(e.target.value)} />
-                </div>
-              </div>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+    <input className="input" placeholder="PD" value={pd} onChange={(e) => setPd(e.target.value)} />
+    <input className="input" placeholder="Notes" value={rxNotes} onChange={(e) => setRxNotes(e.target.value)} />
+  </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input className="input" placeholder="PD" value={pd} onChange={(e) => setPd(e.target.value)} />
-                <input className="input" placeholder="Notes" value={rxNotes} onChange={(e) => setRxNotes(e.target.value)} />
-              </div>
+  <div className="text-xs muted mt-3">Tip: If both eyes are same, fill one side and use “Copy”.</div>
+</Modal>
 
-              <div className="flex flex-col md:flex-row gap-2">
-                <button className="btn btn-primary w-full" onClick={createPrescription} disabled={rxSaving} type="button">
-                  {rxSaving ? "Saving..." : "Save Prescription"}
-                </button>
-
-                <button
-                  className="btn btn-secondary w-full"
-                  type="button"
-                  onClick={() => {
-                    if (rxSaving) return;
-                    resetRxForm();
-                    setRxErr(null);
-                  }}
-                >
-                  Clear
-                </button>
-              </div>
-
-              <div className="text-xs muted">Tip: If both eyes are same, fill one side and use “Copy”.</div>
-            </div>
-          </div>
-        )}
 
         {/* ================= Order Modal ================= */}
-        {orderOpen && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-            <div className="card w-full max-w-3xl card-pad max-h-[85vh] overflow-auto space-y-4">
-              <div className="flex justify-between items-center sticky top-0 pb-2" style={{ background: "rgb(var(--panel))" }}>
-                <div>
-                  <h2 className="text-lg font-semibold">Create Order</h2>
-                  <div className="text-xs muted">Split amounts • Auto balance • Walk-in supported</div>
-                </div>
+<Modal
+  open={orderOpen}
+  onClose={() => {
+    if (orderSaving) return;
+    setOrderOpen(false);
+    setOrderErr(null);
+  }}
+  title="Create Order"
+  description="Split amounts • Auto balance • Walk-in supported"
+  size="xl"
+  busy={orderSaving}
+  footer={
+    <div className="flex flex-col sm:flex-row gap-2">
+      <button
+        className="btn btn-secondary w-full"
+        type="button"
+        onClick={() => {
+          if (orderSaving) return;
+          resetOrderForm();
+          setOrderErr(null);
+        }}
+        disabled={orderSaving}
+      >
+        Clear
+      </button>
 
-                <button
-                  className="btn btn-ghost btn-sm"
-                  type="button"
-                  onClick={() => {
-                    if (orderSaving) return;
-                    setOrderOpen(false);
-                    setOrderErr(null);
-                  }}
-                >
-                  Close
-                </button>
-              </div>
+      <button
+        className="btn btn-primary w-full"
+        type="button"
+        onClick={createOrder}
+        disabled={orderSaving}
+      >
+        {orderSaving ? "Saving..." : "Save Order (Draft)"}
+      </button>
+    </div>
+  }
+>
+  {orderErr && <div className="text-sm text-red-400 mb-3">{orderErr}</div>}
 
-              {orderErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{orderErr}</div>}
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <div>
+      <div className="label mb-1">Consultation Fee</div>
+      <input className="input" value={consultFee} onChange={(e) => setConsultFee(e.target.value)} inputMode="decimal" />
+    </div>
+    <div>
+      <div className="label mb-1">Frames</div>
+      <input className="input" value={framesAmt} onChange={(e) => setFramesAmt(e.target.value)} inputMode="decimal" />
+    </div>
+    <div>
+      <div className="label mb-1">Spectacles / Lenses</div>
+      <input className="input" value={spectaclesAmt} onChange={(e) => setSpectaclesAmt(e.target.value)} inputMode="decimal" />
+    </div>
+  </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <div className="label mb-1">Consultation Fee</div>
-                  <input className="input" value={consultFee} onChange={(e) => setConsultFee(e.target.value)} placeholder="0" inputMode="decimal" />
-                </div>
-                <div>
-                  <div className="label mb-1">Frames</div>
-                  <input className="input" value={framesAmt} onChange={(e) => setFramesAmt(e.target.value)} placeholder="0" inputMode="decimal" />
-                </div>
-                <div>
-                  <div className="label mb-1">Spectacles / Lenses</div>
-                  <input className="input" value={spectaclesAmt} onChange={(e) => setSpectaclesAmt(e.target.value)} placeholder="0" inputMode="decimal" />
-                </div>
-              </div>
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+    <div>
+      <div className="label mb-1">Discount (Flat ₹)</div>
+      <input className="input" value={discountFlat} onChange={(e) => setDiscountFlat(e.target.value)} inputMode="decimal" />
+    </div>
+    <div>
+      <div className="label mb-1">Discount (%)</div>
+      <input className="input" value={discountPct} onChange={(e) => setDiscountPct(e.target.value)} inputMode="decimal" />
+    </div>
+    <div>
+      <div className="label mb-1">Advance Paid</div>
+      <input className="input" value={advancePaid} onChange={(e) => setAdvancePaid(e.target.value)} inputMode="decimal" />
+    </div>
+  </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <div className="label mb-1">Discount (Flat ₹)</div>
-                  <input className="input" value={discountFlat} onChange={(e) => setDiscountFlat(e.target.value)} placeholder="0" inputMode="decimal" />
-                </div>
-                <div>
-                  <div className="label mb-1">Discount (%)</div>
-                  <input className="input" value={discountPct} onChange={(e) => setDiscountPct(e.target.value)} placeholder="0" inputMode="decimal" />
-                </div>
-                <div>
-                  <div className="label mb-1">Advance Paid</div>
-                  <input className="input" value={advancePaid} onChange={(e) => setAdvancePaid(e.target.value)} placeholder="0" inputMode="decimal" />
-                </div>
-              </div>
+  <div className="mt-3">
+    <div className="label mb-1">Notes</div>
+    <input className="input" value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} placeholder="Optional" />
+  </div>
 
-              <div>
-                <div className="label mb-1">Notes</div>
-                <input className="input" value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} placeholder="Optional" />
-              </div>
+  <div className="panel p-3 mt-3">
+    <div className="text-sm font-semibold">Summary</div>
+    <div className="mt-2 grid grid-cols-2 md:grid-cols-6 gap-2 text-sm">
+      {[
+        { label: "Subtotal", value: `₹${money(formTotals.subTotal)}` },
+        { label: "Discount", value: `₹${money(formTotals.disc)}` },
+        { label: "Total", value: `₹${money(formTotals.total)}` },
+        { label: "Advance", value: `₹${money(formTotals.adv)}` },
+        { label: "Balance", value: `₹${money(formTotals.balance)}` },
+        { label: "Discount %", value: `${money(formTotals.pct)}%` },
+      ].map((x) => (
+        <div key={x.label} className="surface-muted p-2">
+          <div className="text-xs muted">{x.label}</div>
+          <div className="font-semibold">{x.value}</div>
+        </div>
+      ))}
+    </div>
+  </div>
 
-              <div className="panel p-3">
-                <div className="text-sm font-semibold">Summary</div>
-                <div className="mt-2 grid grid-cols-2 md:grid-cols-6 gap-2 text-sm">
-                  {[
-                    { label: "Subtotal", value: `₹${money(formTotals.subTotal)}` },
-                    { label: "Discount", value: `₹${money(formTotals.disc)}` },
-                    { label: "Total", value: `₹${money(formTotals.total)}` },
-                    { label: "Advance", value: `₹${money(formTotals.adv)}` },
-                    { label: "Balance", value: `₹${money(formTotals.balance)}` },
-                    { label: "Discount %", value: `${money(formTotals.pct)}%` },
-                  ].map((x) => (
-                    <div key={x.label} className="surface-muted p-2">
-                      <div className="text-xs muted">{x.label}</div>
-                      <div className="font-semibold">{x.value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
+  <div className="text-xs muted mt-3">Order links to the latest prescription automatically (if present).</div>
+</Modal>
 
-              <div className="flex flex-col md:flex-row gap-2">
-                <button className="btn btn-primary w-full" onClick={createOrder} disabled={orderSaving} type="button">
-                  {orderSaving ? "Saving..." : "Save Order (Draft)"}
-                </button>
-
-                <button
-                  className="btn btn-secondary w-full"
-                  type="button"
-                  onClick={() => {
-                    if (orderSaving) return;
-                    resetOrderForm();
-                    setOrderErr(null);
-                  }}
-                >
-                  Clear
-                </button>
-              </div>
-
-              <div className="text-xs muted">Order links to the latest prescription automatically (if present).</div>
-            </div>
-          </div>
-        )}
 
         {/* ================= Payment Modal ================= */}
-        {payOpen && (
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-            <div className="card w-full max-w-lg card-pad space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-lg font-semibold">Record Payment</div>
-                  <div className="text-xs muted">Total ₹{money(payTotal)} • Updates invoice Paid/Partial/Unpaid</div>
-                </div>
-                <button
-                  className="btn btn-ghost btn-sm"
-                  type="button"
-                  onClick={() => {
-                    if (paySaving) return;
-                    setPayOpen(false);
-                  }}
-                >
-                  Close
-                </button>
-              </div>
+<Modal
+  open={payOpen}
+  onClose={() => {
+    if (paySaving) return;
+    setPayOpen(false);
+  }}
+  title="Record Payment"
+  description={`Total ₹${money(payTotal)} • Updates invoice Paid/Partial/Unpaid`}
+  size="md"
+  busy={paySaving}
+  footer={
+    <div className="flex flex-col sm:flex-row gap-2">
+      <button
+        className="btn btn-secondary w-full"
+        type="button"
+        onClick={() => setPayAmount(String(payTotal))}
+        disabled={paySaving}
+      >
+        Mark paid (full)
+      </button>
 
-              {payErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{payErr}</div>}
+      <button
+        className="btn btn-primary w-full"
+        type="button"
+        onClick={submitPayment}
+        disabled={paySaving}
+      >
+        {paySaving ? "Saving…" : "Save payment"}
+      </button>
+    </div>
+  }
+>
+  {payErr && <div className="text-sm text-red-400 mb-3">{payErr}</div>}
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <div className="label mb-1">Amount paid</div>
-                  <input className="input" inputMode="decimal" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0" />
-                  <div className="text-[11px] muted mt-1">Tip: For full payment, use “Mark paid (full)”.</div>
-                </div>
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+    <div>
+      <div className="label mb-1">Amount paid</div>
+      <input
+        className="input"
+        inputMode="decimal"
+        value={payAmount}
+        onChange={(e) => setPayAmount(e.target.value)}
+        placeholder="0"
+      />
+      <div className="text-[11px] muted mt-1">Tip: For full payment, use “Mark paid (full)”.</div>
+    </div>
 
-                <div>
-                  <div className="label mb-1">Payment mode</div>
-                  <select className="input" value={payMode} onChange={(e) => setPayMode(e.target.value)}>
-                    <option>Cash</option>
-                    <option>UPI</option>
-                    <option>Card</option>
-                    <option>Other</option>
-                  </select>
-                </div>
-              </div>
+    <div>
+      <div className="label mb-1">Payment mode</div>
+      <select className="input" value={payMode} onChange={(e) => setPayMode(e.target.value)}>
+        <option>Cash</option>
+        <option>UPI</option>
+        <option>Card</option>
+        <option>Other</option>
+      </select>
+    </div>
+  </div>
 
-              <div className="flex gap-2">
-                <button className="btn btn-secondary w-full" type="button" onClick={() => setPayAmount(String(payTotal))} disabled={paySaving}>
-                  Mark paid (full)
-                </button>
+  <div className="text-xs muted mt-3">
+    After saving, Orders will reflect Paid/Partial/Unpaid for this order.
+  </div>
+</Modal>
 
-                <button className="btn btn-primary w-full" type="button" onClick={submitPayment} disabled={paySaving}>
-                  {paySaving ? "Saving…" : "Save payment"}
-                </button>
-              </div>
-
-              <div className="text-xs muted">After saving, Orders will reflect Paid/Partial/Unpaid for this order.</div>
-            </div>
-          </div>
-        )}
       </div>
-
-      <style jsx global>{`
-        .no-scrollbar::-webkit-scrollbar {
-          display: none;
-        }
-        .no-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
     </main>
   );
 }

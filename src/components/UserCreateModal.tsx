@@ -60,7 +60,8 @@ export default function UserCreateModal({
 
     const e = email.trim().toLowerCase();
     if (!e) return setErr("Email is required");
-    if (!tempPassword || tempPassword.trim().length < 6) return setErr("Temp password must be at least 6 characters");
+    if (!tempPassword || tempPassword.trim().length < 6)
+      return setErr("Temp password must be at least 6 characters");
     if (storeIds.length === 0) return setErr("Select at least one store");
 
     setSaving(true);
@@ -96,34 +97,40 @@ export default function UserCreateModal({
   return (
     <Modal
       open={open}
-      onClose={() => {
-        if (saving) return;
-        onClose();
-      }}
+      onClose={onClose}
       title="Create User"
-      description="Create Admin, Doctor, or Billing users (owners are created manually)."
-      size="md"
-      closeOnBackdrop
-      closeOnEsc
-      preventCloseWhileBusy
+      description={
+        <>
+          Owners (<code>SHOP_OWNER</code>) are created manually. Create Admin, Doctor, or Billing users here.
+        </>
+      }
+      size="xl"
       busy={saving}
       footer={
-        <div className="pt-4 flex flex-col sm:flex-row gap-2">
-          <button className="btn btn-primary w-full" onClick={create} disabled={saving} type="button">
-            {saving ? "Creating…" : "Create User"}
-          </button>
-          <button className="btn btn-secondary w-full" onClick={onClose} disabled={saving} type="button">
+        <div className="flex gap-2">
+          <button className="btn btn-ghost flex-1" onClick={onClose} disabled={saving} type="button">
             Cancel
+          </button>
+          <button className="btn btn-primary flex-1" onClick={create} disabled={saving} type="button">
+            {saving ? "Creating…" : "Create User"}
           </button>
         </div>
       }
     >
-      <div className="surface-muted p-3 text-xs">
-        <span className="font-semibold">Note:</span> Owners (<code>SHOP_OWNER</code>) are created manually for security
-        reasons.
-      </div>
-
-      {err && <div className="text-sm text-red-400">{err}</div>}
+      {err && (
+        <div
+          className="text-sm"
+          style={{
+            color: "rgb(var(--fg))",
+            background: "rgba(var(--danger),0.14)",
+            border: "1px solid rgba(var(--danger),0.22)",
+            borderRadius: "12px",
+            padding: "10px 12px",
+          }}
+        >
+          {err}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
@@ -168,17 +175,24 @@ export default function UserCreateModal({
             type="password"
             autoComplete="new-password"
           />
-          <div className="text-[11px] muted mt-1">User will be forced to change on next login.</div>
+          <div className="text-[11px] subtle mt-1">User will be forced to change on next login.</div>
         </div>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
+      <div className="mt-4">
+        <div className="flex items-center justify-between gap-2 mb-2">
           <div className="label">Stores *</div>
-          <div className="text-[11px] muted">Selected: {storeIds.length}</div>
+          <div className="text-[11px] subtle">Selected: {storeIds.length}</div>
         </div>
 
-        <div className="surface-muted p-2 max-h-[40vh] overflow-y-auto">
+        <div
+          className="p-2 max-h-[40vh] overflow-y-auto"
+          style={{
+            borderRadius: "14px",
+            border: "1px solid rgba(255,255,255,0.08)",
+            background: "rgba(255,255,255,0.03)",
+          }}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {stores.map((s) => {
               const checked = storeIds.includes(s.id);
@@ -187,26 +201,28 @@ export default function UserCreateModal({
                   type="button"
                   key={s.id}
                   onClick={() => toggleStore(s.id)}
-                  className={cls(
-                    "text-left text-sm rounded-xl px-3 py-2 transition border",
+                  className={cls("btn justify-start w-full")}
+                  style={
                     checked
-                      ? "bg-[rgba(var(--brand),0.18)] border-[rgba(var(--brand),0.32)]"
-                      : "bg-[rgba(255,255,255,0.03)] border-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.05)]"
-                  )}
+                      ? { background: "rgba(var(--brand),0.16)", borderColor: "rgba(var(--brand),0.25)" }
+                      : { background: "rgba(255,255,255,0.02)", borderColor: "rgba(255,255,255,0.08)" }
+                  }
                 >
-                  <div className="font-medium truncate">{s.name}</div>
-                  <div className={cls("text-xs truncate", checked ? "text-[rgba(var(--fg),0.85)]" : "muted")}>
-                    {s.city ?? ""}
+                  <div className="min-w-0 text-left">
+                    <div className="font-medium truncate">{s.name}</div>
+                    <div className="text-[11px] subtle truncate">{s.city ?? ""}</div>
                   </div>
                 </button>
               );
             })}
 
-            {stores.length === 0 && <div className="text-sm muted p-2">No stores found.</div>}
+            {stores.length === 0 && (
+              <div className="text-sm subtle p-2">No stores found. (Seed should create stores.)</div>
+            )}
           </div>
         </div>
 
-        {storeIds.length === 0 && <div className="text-[11px] muted">Tip: choose at least one store.</div>}
+        {storeIds.length === 0 && <div className="text-[11px] subtle mt-2">Tip: choose at least one store.</div>}
       </div>
     </Modal>
   );

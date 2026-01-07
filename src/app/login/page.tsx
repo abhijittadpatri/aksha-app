@@ -33,7 +33,6 @@ export default function LoginPage() {
 
       if (!res.ok) {
         setErr(data.error ?? "Login failed");
-        setBusy(false);
         return;
       }
 
@@ -53,17 +52,18 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-[80vh] flex items-center justify-center p-6">
+    <main className="min-h-[100dvh] flex items-center justify-center p-6">
       <div className="w-full max-w-md">
-        {/* Brand header (dark SaaS style) */}
-        <div className="mb-4">
+        {/* Brand header */}
+        <div className="mb-5">
           <div className="flex items-center gap-3">
             <div
-              className="h-10 w-10 rounded-2xl"
+              className="h-11 w-11 rounded-2xl"
               style={{
                 background:
-                  "radial-gradient(120% 120% at 30% 20%, rgba(var(--brand),0.55), rgba(var(--brand),0.12))",
-                boxShadow: "0 18px 40px rgba(var(--brand),0.18)",
+                  "radial-gradient(120% 120% at 30% 20%, rgba(var(--brand),0.60), rgba(var(--brand),0.10))",
+                boxShadow:
+                  "0 18px 45px rgba(var(--brand),0.18), inset 0 1px 0 rgba(255,255,255,0.10)",
                 border: "1px solid rgba(255,255,255,0.10)",
               }}
             />
@@ -74,80 +74,102 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Card */}
-        <div className="card card-pad space-y-4">
-          <div className="space-y-1">
-            <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
-            <p className="text-sm muted">Use your email and password to continue.</p>
-          </div>
-
-          {err && (
-            <div
-              className="rounded-xl px-3 py-2 text-sm"
-              style={{
-                background: "rgba(var(--danger), 0.16)",
-                border: "1px solid rgba(var(--danger), 0.25)",
-                color: "rgb(var(--fg))",
-              }}
-            >
-              {err}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-3">
+        {/* Contrast wrapper: gives the card a “stand out” rim + glow */}
+        <div
+          className="rounded-[22px] p-[1px]"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(var(--brand),0.55), rgba(255,255,255,0.08), rgba(var(--brand),0.18))",
+            boxShadow: "0 26px 70px rgba(0,0,0,0.55)",
+          }}
+        >
+          {/* The actual sign-in block (slightly brighter surface than default card) */}
+          <div
+            className="rounded-[22px] p-4 md:p-5 space-y-4"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(var(--panel-2),0.92), rgba(var(--panel),0.88))",
+              border: "1px solid rgba(255,255,255,0.06)",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+            }}
+          >
             <div className="space-y-1">
-              <div className="label">Email</div>
-              <input
-                className="input"
-                placeholder="you@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="email"
-                inputMode="email"
-              />
+              <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
+              <p className="text-sm muted">Use your email and password to continue.</p>
             </div>
 
-            <div className="space-y-1">
-              <div className="label">Password</div>
-              <input
-                className="input"
-                placeholder="••••••••"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") submit();
+            {err && (
+              <div
+                className="rounded-xl px-3 py-2 text-sm"
+                style={{
+                  background:
+                    "linear-gradient(180deg, rgba(var(--danger),0.22), rgba(var(--danger),0.12))",
+                  border: "1px solid rgba(var(--danger),0.28)",
+                  color: "rgb(var(--fg))",
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
                 }}
-              />
+              >
+                {err}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-3">
+              <div className="space-y-1">
+                <div className="label">Email</div>
+                <input
+                  className="input"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="email"
+                  inputMode="email"
+                  disabled={busy}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <div className="label">Password</div>
+                <input
+                  className="input"
+                  placeholder="••••••••"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  disabled={busy}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submit();
+                  }}
+                />
+              </div>
+
+              <button className="btn btn-primary w-full" onClick={submit} disabled={busy} type="button">
+                {busy ? "Signing in..." : "Login"}
+              </button>
+
+              {/* <button
+                className="btn btn-secondary w-full"
+                type="button"
+                onClick={() => {
+                  setEmail("");
+                  setPassword("");
+                  setErr(null);
+                }}
+                disabled={busy}
+              >
+                Clear
+              </button> */}
             </div>
 
-            <button className="btn btn-primary w-full" onClick={submit} disabled={busy} type="button">
-              {busy ? "Signing in..." : "Login"}
-            </button>
-
-            <button
-              className="btn btn-secondary w-full"
-              type="button"
-              onClick={() => {
-                setEmail("");
-                setPassword("");
-                setErr(null);
-              }}
-              disabled={busy}
-            >
-              Clear
-            </button>
-          </div>
-
-          <div className="text-xs muted">
-            If your password was reset by Admin, you may be redirected to change it.
+            <div className="text-xs muted">
+              If your password was reset by Admin, you may be redirected to change it.
+            </div>
           </div>
         </div>
 
-        {/* Tiny footer */}
+        {/* Footer */}
         <div className="mt-4 text-[11px] muted text-center">
-          © {new Date().getFullYear()} Aksha • Dark SaaS Theme
+          © {new Date().getFullYear()} Aksha
         </div>
       </div>
     </main>

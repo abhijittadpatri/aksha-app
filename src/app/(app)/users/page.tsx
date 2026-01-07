@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import UserCreateModal, { CreatedPayload } from "@/components/UserCreateModal";
+import Modal from "@/components/ui/Modal";
 
 function cls(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
@@ -22,50 +23,16 @@ function statusLabel(u: any) {
   return "Active";
 }
 
-function statusPillClass(u: any) {
-  const disabled = u?.isActive === false;
-  if (disabled) return "bg-gray-100 text-gray-700 border-gray-200";
-  if (u?.mustChangePassword) return "bg-yellow-50 text-yellow-900 border-yellow-200";
-  return "bg-green-50 text-green-900 border-green-200";
+function statusBadgeKind(u: any): "ok" | "warn" | "muted" {
+  if (u?.isActive === false) return "muted";
+  if (u?.mustChangePassword) return "warn";
+  return "ok";
 }
 
-function ModalShell({
-  title,
-  subtitle,
-  children,
-  onClose,
-  busy,
-}: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-  onClose: () => void;
-  busy?: boolean;
-}) {
-  return (
-    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-      <div className="bg-white w-full max-w-md rounded-2xl shadow overflow-hidden">
-        <div className="p-4 border-b">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="font-semibold truncate">{title}</div>
-              {subtitle ? <div className="text-xs text-gray-500 truncate">{subtitle}</div> : null}
-            </div>
-            <button
-              className="text-sm underline shrink-0"
-              onClick={() => {
-                if (busy) return;
-                onClose();
-              }}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-        <div className="p-4">{children}</div>
-      </div>
-    </div>
-  );
+function StatusBadge({ u }: { u: any }) {
+  const kind = statusBadgeKind(u);
+  const k = kind === "ok" ? "badge badge-ok" : kind === "warn" ? "badge badge-warn" : "badge";
+  return <span className={k}>{statusLabel(u)}</span>;
 }
 
 export default function UsersPage() {
@@ -257,279 +224,328 @@ Please login and change your password immediately.
     }
   }
 
+  const bannerClass = (kind: "ok" | "warn" | "err") =>
+    cls(
+      "card card-pad flex items-start justify-between gap-3",
+      kind === "ok" && "border border-[rgba(var(--success),0.30)]",
+      kind === "warn" && "border border-[rgba(var(--warning),0.30)]",
+      kind === "err" && "border border-[rgba(var(--danger),0.30)]"
+    );
+
+  const bannerTextClass = (kind: "ok" | "warn" | "err") =>
+    cls(
+      "text-sm",
+      kind === "ok" && "text-[rgb(var(--fg))]",
+      kind === "warn" && "text-[rgb(var(--fg))]",
+      kind === "err" && "text-red-400"
+    );
+
   return (
-    <main className="p-4 md:p-6 space-y-4">
-      <div className="flex items-start md:items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-semibold">Users</h1>
-          <p className="text-sm text-gray-500">Create users and manage access.</p>
-        </div>
-
-        <button className="btn btn-primary" onClick={() => setOpen(true)}>
-          + Add User
-        </button>
-      </div>
-
-      {err && <div className="text-sm text-red-600">{err}</div>}
-
-      {banner && (
-        <div
-          className={cls(
-            "border rounded-2xl p-3 text-sm flex items-start justify-between gap-3 bg-white",
-            banner.kind === "ok" && "border-green-200",
-            banner.kind === "warn" && "border-yellow-200",
-            banner.kind === "err" && "border-red-200"
-          )}
-        >
-          <div
-            className={cls(
-              banner.kind === "ok" && "text-green-800",
-              banner.kind === "warn" && "text-yellow-900",
-              banner.kind === "err" && "text-red-700"
-            )}
-          >
-            {banner.text}
+    <main className="p-4 md:p-6">
+      <div className="page space-y-4">
+        {/* Header */}
+        <div className="flex items-start md:items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <h1 className="h1">Users</h1>
+            <p className="subtle">Create users and manage access.</p>
           </div>
-          <button className="text-xs underline" onClick={() => setBanner(null)}>
-            Dismiss
+
+          <button className="btn btn-primary w-full md:w-auto" onClick={() => setOpen(true)} type="button">
+            + Add User
           </button>
         </div>
-      )}
 
-      {/* Invite Message */}
-      {inviteText && (
-        <div className="card card-pad space-y-3">
-          <div className="font-medium">Invite message</div>
+        {err && <div className="text-sm text-red-400">{err}</div>}
 
-          <pre className="text-xs whitespace-pre-wrap bg-gray-50 p-3 rounded-lg border overflow-auto">
-            {inviteText}
-          </pre>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              className="btn btn-ghost border"
-              onClick={async () => {
-                await navigator.clipboard.writeText(inviteText);
-                setBanner({ kind: "ok", text: "Invite message copied ✅" });
-              }}
-            >
-              Copy Invite Message
-            </button>
-
-            <a
-              className="btn btn-primary"
-              href={`https://wa.me/?text=${encodeURIComponent(inviteText)}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Send on WhatsApp
-            </a>
-
-            <button className="text-sm underline" onClick={() => setInviteText("")}>
-              Clear
+        {banner && (
+          <div className={bannerClass(banner.kind)}>
+            <div className={bannerTextClass(banner.kind)}>{banner.text}</div>
+            <button className="btn btn-ghost btn-sm" onClick={() => setBanner(null)} type="button">
+              Dismiss
             </button>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ===== Mobile list (cleaner) ===== */}
-      <div className="md:hidden space-y-3">
-        {users.map((u) => {
-          const stores = (u?.stores ?? []).map((s: any) => s?.name).filter(Boolean);
-          const storesText = stores.length ? stores.join(", ") : "-";
-          const disabled = u?.isActive === false;
+        {/* Invite Message */}
+        {inviteText && (
+          <div className="card card-pad space-y-3">
+            <div className="h2">Invite message</div>
 
-          return (
-            <div key={u.id} className="card card-pad space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-semibold truncate">{u.name || "-"}</div>
-                  <div className="text-sm text-gray-600 truncate">{u.email}</div>
+            <pre
+              className="text-xs whitespace-pre-wrap rounded-xl p-3 overflow-auto"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                color: "rgb(var(--fg))",
+              }}
+            >
+              {inviteText}
+            </pre>
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="btn btn-secondary"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(inviteText);
+                  setBanner({ kind: "ok", text: "Invite message copied ✅" });
+                }}
+                type="button"
+              >
+                Copy Invite Message
+              </button>
+
+              <a
+                className="btn btn-primary"
+                href={`https://wa.me/?text=${encodeURIComponent(inviteText)}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Send on WhatsApp
+              </a>
+
+              <button className="btn btn-ghost" onClick={() => setInviteText("")} type="button">
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ===== Mobile list ===== */}
+        <div className="md:hidden space-y-3">
+          {users.map((u) => {
+            const stores = (u?.stores ?? []).map((s: any) => s?.name).filter(Boolean);
+            const storesText = stores.length ? stores.join(", ") : "—";
+            const disabled = u?.isActive === false;
+
+            return (
+              <div key={u.id} className="panel p-4 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate">{u.name || "—"}</div>
+                    <div className="text-sm muted truncate">{u.email}</div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="badge">{roleLabel(u.role)}</span>
+
+                    <div className="relative">
+                      <button
+                        className="btn btn-ghost btn-icon-sm"
+                        onClick={() => setMenuOpenFor((prev) => (prev === u.id ? null : u.id))}
+                        type="button"
+                        aria-label="Actions"
+                        title="Actions"
+                      >
+                        ⋯
+                      </button>
+
+                      {menuOpenFor === u.id && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setMenuOpenFor(null)} />
+
+                          {/* Dark menu */}
+                          <div
+                            className="absolute right-0 top-11 z-50 w-52 overflow-hidden rounded-2xl"
+                            style={{
+                              background: "rgba(var(--panel-2), 1)",
+                              border: "1px solid rgba(255,255,255,0.08)",
+                              boxShadow: "0 18px 40px rgba(0,0,0,0.55)",
+                            }}
+                          >
+                            <div className="p-1">
+                              {!disabled ? (
+                                <button
+                                  className="btn btn-secondary w-full justify-start"
+                                  onClick={() => openResetPassword(u)}
+                                  type="button"
+                                >
+                                  Reset password
+                                </button>
+                              ) : null}
+
+                              <button
+                                className="btn btn-secondary w-full justify-start mt-1"
+                                onClick={() => openStatusConfirm(u)}
+                                type="button"
+                              >
+                                {disabled ? "Enable user" : "Disable user"}
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="badge">{roleLabel(u.role)}</span>
+                <div className="text-sm">
+                  <div className="label mb-1">Stores</div>
+                  <div className="break-words" style={{ color: "rgb(var(--fg))" }}>
+                    {storesText}
+                  </div>
+                </div>
 
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <StatusBadge u={u} />
+
+                  {u.disabledAt && disabled ? (
+                    <div className="text-xs muted">Disabled: {new Date(u.disabledAt).toLocaleString()}</div>
+                  ) : (
+                    <div className="text-xs muted"> </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {users.length === 0 && <div className="panel p-4 text-sm muted">No users yet.</div>}
+        </div>
+
+        {/* ===== Desktop table ===== */}
+        <div className="hidden md:block table">
+          <div className="table-head grid-cols-6 p-3">
+            <div>Name</div>
+            <div>Email</div>
+            <div>Role</div>
+            <div>Stores</div>
+            <div>Status</div>
+            <div className="text-right">Actions</div>
+          </div>
+
+          {users.map((u) => {
+            const disabled = u?.isActive === false;
+            const storesText = u.stores?.map((s: any) => s.name).join(", ") || "—";
+
+            return (
+              <div key={u.id} className="table-row grid-cols-6 p-3 items-center">
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{u.name || "—"}</div>
+                  {u.disabledAt && disabled ? (
+                    <div className="text-xs muted truncate">Disabled: {new Date(u.disabledAt).toLocaleString()}</div>
+                  ) : (
+                    <div className="text-xs muted truncate"> </div>
+                  )}
+                </div>
+
+                <div className="min-w-0 truncate muted">{u.email}</div>
+                <div>
+                  <span className="badge">{roleLabel(u.role)}</span>
+                </div>
+                <div className="min-w-0 truncate muted">{storesText}</div>
+
+                <div>
+                  <StatusBadge u={u} />
+                </div>
+
+                <div className="flex justify-end">
                   <div className="relative">
                     <button
-                      className="btn btn-ghost border"
+                      className="btn btn-ghost btn-icon-sm"
                       onClick={() => setMenuOpenFor((prev) => (prev === u.id ? null : u.id))}
+                      type="button"
+                      aria-label="Actions"
+                      title="Actions"
                     >
                       ⋯
                     </button>
 
                     {menuOpenFor === u.id && (
                       <>
+                        <div className="fixed inset-0 z-40" onClick={() => setMenuOpenFor(null)} />
                         <div
-                          className="fixed inset-0 z-40"
-                          onClick={() => setMenuOpenFor(null)}
-                        />
-                        <div className="absolute right-0 top-11 z-50 w-48 rounded-xl border bg-white shadow p-1">
-                          {!disabled ? (
-                            <button
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-lg"
-                              onClick={() => openResetPassword(u)}
-                            >
-                              Reset password
-                            </button>
-                          ) : null}
+                          className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-2xl"
+                          style={{
+                            background: "rgba(var(--panel-2), 1)",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                            boxShadow: "0 18px 40px rgba(0,0,0,0.55)",
+                          }}
+                        >
+                          <div className="p-1">
+                            {!disabled ? (
+                              <button
+                                className="btn btn-secondary w-full justify-start"
+                                onClick={() => openResetPassword(u)}
+                                type="button"
+                              >
+                                Reset password
+                              </button>
+                            ) : null}
 
-                          <button
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-lg"
-                            onClick={() => openStatusConfirm(u)}
-                          >
-                            {disabled ? "Enable user" : "Disable user"}
-                          </button>
+                            <button
+                              className="btn btn-secondary w-full justify-start mt-1"
+                              onClick={() => openStatusConfirm(u)}
+                              type="button"
+                            >
+                              {disabled ? "Enable user" : "Disable user"}
+                            </button>
+                          </div>
                         </div>
                       </>
                     )}
                   </div>
                 </div>
               </div>
+            );
+          })}
 
-              <div className="text-sm">
-                <div className="text-xs text-gray-500 mb-1">Stores</div>
-                <div className="text-gray-800 break-words">{storesText}</div>
-              </div>
-
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className={cls("text-xs px-2 py-1 rounded-full border", statusPillClass(u))}>
-                  {statusLabel(u)}
-                </span>
-
-                {u.disabledAt && disabled ? (
-                  <div className="text-xs text-gray-500">
-                    Disabled: {new Date(u.disabledAt).toLocaleString()}
-                  </div>
-                ) : (
-                  <div className="text-xs text-gray-500"> </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-
-        {users.length === 0 && (
-          <div className="p-4 text-sm text-gray-500 border rounded-2xl bg-white">No users yet.</div>
-        )}
-      </div>
-
-      {/* ===== Desktop table (less clutter + actions menu) ===== */}
-      <div className="hidden md:block table">
-        <div className="table-head grid-cols-6 p-3">
-          <div>Name</div>
-          <div>Email</div>
-          <div>Role</div>
-          <div>Stores</div>
-          <div>Status</div>
-          <div className="text-right">Actions</div>
+          {users.length === 0 && <div className="p-4 text-sm muted">No users yet.</div>}
         </div>
 
-        {users.map((u) => {
-          const disabled = u?.isActive === false;
-          const storesText = u.stores?.map((s: any) => s.name).join(", ") || "-";
+        <UserCreateModal
+          open={open}
+          onClose={() => setOpen(false)}
+          onCreated={(payload?: CreatedPayload) => {
+            setOpen(false);
+            load();
 
-          return (
-            <div key={u.id} className="table-row grid-cols-6 p-3 items-center">
-              <div className="min-w-0">
-                <div className="truncate font-medium">{u.name || "-"}</div>
-                {u.disabledAt && disabled ? (
-                  <div className="text-xs text-gray-500 truncate">
-                    Disabled: {new Date(u.disabledAt).toLocaleString()}
-                  </div>
-                ) : (
-                  <div className="text-xs text-gray-400 truncate"> </div>
-                )}
-              </div>
+            const msg = buildInvite(payload?.email, payload?.tempPassword);
+            if (msg) setInviteText(msg);
 
-              <div className="min-w-0 truncate text-gray-700">{u.email}</div>
-              <div>
-                <span className="badge">{roleLabel(u.role)}</span>
-              </div>
-              <div className="min-w-0 truncate text-gray-700">{storesText}</div>
+            setBanner({ kind: "ok", text: "User created ✅" });
+          }}
+        />
 
-              <div>
-                <span
-                  className={cls(
-                    "inline-flex text-[12px] px-2 py-1 rounded-full border",
-                    statusPillClass(u)
-                  )}
-                >
-                  {statusLabel(u)}
-                </span>
-              </div>
-
-              <div className="flex justify-end">
-                <div className="relative">
-                  <button
-                    className="btn btn-ghost border"
-                    onClick={() => setMenuOpenFor((prev) => (prev === u.id ? null : u.id))}
-                  >
-                    ⋯
-                  </button>
-
-                  {menuOpenFor === u.id && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setMenuOpenFor(null)} />
-                      <div className="absolute right-0 top-11 z-50 w-52 rounded-xl border bg-white shadow p-1">
-                        {!disabled ? (
-                          <button
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-lg"
-                            onClick={() => openResetPassword(u)}
-                          >
-                            Reset password
-                          </button>
-                        ) : null}
-
-                        <button
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded-lg"
-                          onClick={() => openStatusConfirm(u)}
-                        >
-                          {disabled ? "Enable user" : "Disable user"}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-
-        {users.length === 0 && <div className="p-4 text-sm text-gray-500">No users yet.</div>}
-      </div>
-
-      <UserCreateModal
-        open={open}
-        onClose={() => setOpen(false)}
-        onCreated={(payload?: CreatedPayload) => {
-          setOpen(false);
-          load();
-
-          const msg = buildInvite(payload?.email, payload?.tempPassword);
-          if (msg) setInviteText(msg);
-
-          setBanner({ kind: "ok", text: "User created ✅" });
-        }}
-      />
-
-      {/* Reset Password Modal */}
-      {rpOpen && (
-        <ModalShell
-          title="Reset Password"
-          subtitle={`${rpUser?.name ?? "-"} • ${rpUser?.email ?? "-"}`}
+        {/* Reset Password Modal (new system) */}
+        <Modal
+          open={rpOpen}
           onClose={() => {
             if (rpSaving) return;
             setRpOpen(false);
             setRpErr(null);
           }}
+          title="Reset Password"
+          description={`${rpUser?.name ?? "—"} • ${rpUser?.email ?? "—"}`}
           busy={rpSaving}
+          footer={
+            <div className="flex gap-2">
+              <button
+                className="btn btn-secondary w-full"
+                type="button"
+                onClick={() => {
+                  if (rpSaving) return;
+                  setRpOpen(false);
+                  setRpErr(null);
+                }}
+                disabled={rpSaving}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary w-full"
+                onClick={submitResetPassword}
+                disabled={rpSaving}
+                type="button"
+              >
+                {rpSaving ? "Saving..." : "Reset Password"}
+              </button>
+            </div>
+          }
         >
-          {rpErr && <div className="mb-3 text-sm text-red-600">{rpErr}</div>}
+          {rpErr && <div className="mb-3 text-sm text-red-400">{rpErr}</div>}
 
           <div className="space-y-3">
             <div>
-              <div className="text-xs text-gray-500 mb-1">New temporary password</div>
+              <div className="label mb-1">New temporary password</div>
               <input
                 className="input"
                 placeholder="Min 6 chars"
@@ -542,7 +558,7 @@ Please login and change your password immediately.
             </div>
 
             <div>
-              <div className="text-xs text-gray-500 mb-1">Confirm password</div>
+              <div className="label mb-1">Confirm password</div>
               <input
                 className="input"
                 placeholder="Repeat password"
@@ -554,48 +570,26 @@ Please login and change your password immediately.
               />
             </div>
 
-            <div className="text-xs text-gray-500">
-              User will be forced to change password at next login.
-            </div>
-
-            <button className="btn btn-primary w-full" onClick={submitResetPassword} disabled={rpSaving}>
-              {rpSaving ? "Saving..." : "Reset Password"}
-            </button>
+            <div className="text-xs muted">User will be forced to change password at next login.</div>
           </div>
-        </ModalShell>
-      )}
+        </Modal>
 
-      {/* Enable/Disable confirmation modal */}
-      {stOpen && (
-        <ModalShell
-          title={stUser?.isActive === false ? "Enable user?" : "Disable user?"}
-          subtitle={`${stUser?.name ?? "-"} • ${stUser?.email ?? "-"}`}
+        {/* Enable/Disable confirmation modal (new system) */}
+        <Modal
+          open={stOpen}
           onClose={() => {
             if (stSaving) return;
             setStOpen(false);
             setStErr(null);
           }}
+          title={stUser?.isActive === false ? "Enable user?" : "Disable user?"}
+          description={`${stUser?.name ?? "—"} • ${stUser?.email ?? "—"}`}
           busy={stSaving}
-        >
-          {stErr && <div className="mb-3 text-sm text-red-600">{stErr}</div>}
-
-          <div className="space-y-3">
-            <div className="text-sm text-gray-700">
-              {stUser?.isActive === false ? (
-                <>This will allow the user to login and access the app again.</>
-              ) : (
-                <>
-                  Disabled users will be blocked from login and API access.
-                  <div className="text-xs text-gray-500 mt-1">
-                    (You can re-enable them anytime.)
-                  </div>
-                </>
-              )}
-            </div>
-
+          footer={
             <div className="flex gap-2">
               <button
-                className="btn btn-ghost border flex-1"
+                className="btn btn-secondary w-full"
+                type="button"
                 onClick={() => {
                   if (stSaving) return;
                   setStOpen(false);
@@ -607,23 +601,30 @@ Please login and change your password immediately.
               </button>
 
               <button
-                className={cls(
-                  "btn flex-1",
-                  stUser?.isActive === false ? "btn-primary" : "bg-red-600 text-white hover:opacity-90"
-                )}
+                className={cls("btn w-full", stUser?.isActive === false ? "btn-primary" : "btn-danger")}
                 onClick={submitStatusChange}
                 disabled={stSaving}
+                type="button"
               >
-                {stSaving
-                  ? "Saving..."
-                  : stUser?.isActive === false
-                  ? "Enable"
-                  : "Disable"}
+                {stSaving ? "Saving..." : stUser?.isActive === false ? "Enable" : "Disable"}
               </button>
             </div>
+          }
+        >
+          {stErr && <div className="mb-3 text-sm text-red-400">{stErr}</div>}
+
+          <div className="space-y-2 text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
+            {stUser?.isActive === false ? (
+              <>This will allow the user to login and access the app again.</>
+            ) : (
+              <>
+                Disabled users will be blocked from login and API access.
+                <div className="text-xs muted mt-1">(You can re-enable them anytime.)</div>
+              </>
+            )}
           </div>
-        </ModalShell>
-      )}
+        </Modal>
+      </div>
     </main>
   );
 }
