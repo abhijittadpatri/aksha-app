@@ -221,26 +221,25 @@ export default function PatientDetailPage() {
     setOrders(data.orders ?? []);
   }
 
-async function loadInvoices() {
-  setInvErr(null);
-  if (!patientId) return;
+  async function loadInvoices() {
+    setInvErr(null);
+    if (!patientId) return;
 
-  const storeId = getActiveStoreId();
-  const storeParam = storeId ? `&storeId=${encodeURIComponent(storeId)}` : "";
+    const storeId = getActiveStoreId();
+    const storeParam = storeId ? `&storeId=${encodeURIComponent(storeId)}` : "";
 
-  const res = await fetch(`/api/invoices?patientId=${patientId}${storeParam}`, {
-    credentials: "include",
-  });
-  const data = await safeJson(res);
+    const res = await fetch(`/api/invoices?patientId=${patientId}${storeParam}`, {
+      credentials: "include",
+    });
+    const data = await safeJson(res);
 
-  if (!res.ok) {
-    setInvErr(data.error ?? "Failed to load invoices");
-    setInvoices([]);
-    return;
+    if (!res.ok) {
+      setInvErr(data.error ?? "Failed to load invoices");
+      setInvoices([]);
+      return;
+    }
+    setInvoices(data.invoices ?? []);
   }
-  setInvoices(data.invoices ?? []);
-}
-
 
   async function loadAll() {
     if (!patientId) return;
@@ -951,6 +950,18 @@ async function loadInvoices() {
                   const invPS = inv ? invoicePaymentStatus(inv) : null;
                   const invTotal = inv ? invoiceTotal(inv) : 0;
 
+                  // ✅ NEW: display balance based on invoice payment status
+                  let displayBalance = oc.balance;
+                  if (inv) {
+                    const paidAmt = invoiceAmountPaid(inv);
+                    const totalAmt = invoiceTotal(inv);
+                    const ps = invoicePaymentStatus(inv);
+
+                    if (ps === "Paid") displayBalance = 0;
+                    else if (ps === "Partial") displayBalance = Math.max(0, totalAmt - paidAmt);
+                    // Unpaid -> keep oc.balance (advance-based)
+                  }
+
                   return (
                     <div key={o.id} className="border rounded-2xl p-3 space-y-3">
                       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
@@ -973,7 +984,7 @@ async function loadInvoices() {
                           </div>
 
                           <div className="text-xs text-gray-600 truncate">
-                            {safeDate(o.createdAt)} • Total ₹{money(oc.total)} • Balance ₹{money(oc.balance)}
+                            {safeDate(o.createdAt)} • Total ₹{money(oc.total)} • Balance ₹{money(displayBalance)}
                           </div>
 
                           <div className="text-xs text-gray-500">
@@ -994,7 +1005,10 @@ async function loadInvoices() {
                             </button>
                           ) : inv?.id ? (
                             <>
-                              <button className="btn btn-ghost border" onClick={() => window.location.href = `/invoices/${inv.id}`}>
+                              <button
+                                className="btn btn-ghost border"
+                                onClick={() => (window.location.href = `/invoices/${inv.id}`)}
+                              >
                                 Open Invoice
                               </button>
                               <button className="btn btn-primary" onClick={() => openPaymentModal(inv)}>
@@ -1051,7 +1065,7 @@ async function loadInvoices() {
                         </div>
                         <div className="border rounded-xl p-2">
                           <div className="text-xs text-gray-500">Balance</div>
-                          <div className="font-semibold">₹{money(oc.balance)}</div>
+                          <div className="font-semibold">₹{money(displayBalance)}</div>
                         </div>
                       </div>
 
@@ -1346,7 +1360,9 @@ async function loadInvoices() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-lg font-semibold">Record Payment</div>
-                  <div className="text-xs text-gray-500">Total ₹{money(payTotal)} • Update will set Paid/Partial/Unpaid on invoice</div>
+                  <div className="text-xs text-gray-500">
+                    Total ₹{money(payTotal)} • Update will set Paid/Partial/Unpaid on invoice
+                  </div>
                 </div>
                 <button
                   className="text-sm underline"
@@ -1365,9 +1381,7 @@ async function loadInvoices() {
                 <div>
                   <div className="text-xs text-gray-500 mb-1">Amount paid</div>
                   <input className="input" inputMode="decimal" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0" />
-                  <div className="text-[11px] text-gray-500 mt-1">
-                    Tip: For full payment, use “Mark paid (full)”.
-                  </div>
+                  <div className="text-[11px] text-gray-500 mt-1">Tip: For full payment, use “Mark paid (full)”.</div>
                 </div>
 
                 <div>
@@ -1396,9 +1410,7 @@ async function loadInvoices() {
                 </button>
               </div>
 
-              <div className="text-xs text-gray-500">
-                After saving, the Orders tab will show Paid/Partial/Unpaid for this order.
-              </div>
+              <div className="text-xs text-gray-500">After saving, the Orders tab will show Paid/Partial/Unpaid for this order.</div>
             </div>
           </div>
         )}
