@@ -2,9 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+function safeNumber(v: any) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function money(n: any) {
-  const x = Number(n || 0);
-  return x.toFixed(2);
+  return safeNumber(n).toFixed(2);
 }
 
 function pct(v: any) {
@@ -15,7 +19,7 @@ function pct(v: any) {
 }
 
 function signedMoney(n: any) {
-  const x = Number(n || 0);
+  const x = safeNumber(n);
   const sign = x >= 0 ? "+" : "-";
   return `${sign}₹${money(Math.abs(x))}`;
 }
@@ -48,6 +52,124 @@ type InsightsOverviewResponse = {
   stores?: StoreBlock[];
 };
 
+function DeltaPill({ delta, deltaPctVal }: { delta: number; deltaPctVal: number }) {
+  const up = safeNumber(delta) >= 0;
+  return (
+    <span className={cls("badge", up ? "badge-ok" : "badge-danger")}>
+      {signedMoney(delta)} ({pct(deltaPctVal)})
+    </span>
+  );
+}
+
+function KpiCard({
+  title,
+  value,
+  subtitle,
+  delta,
+  deltaPctVal,
+  tone = "brand",
+  icon,
+}: {
+  title: string;
+  value: string;
+  subtitle?: string;
+  delta?: number;
+  deltaPctVal?: number;
+  tone?: "brand" | "info" | "success" | "warning";
+  icon?: string;
+}) {
+  const toneVar =
+    tone === "info"
+      ? "var(--info)"
+      : tone === "success"
+      ? "var(--success)"
+      : tone === "warning"
+      ? "var(--warning)"
+      : "var(--brand)";
+
+  return (
+    <div
+      className="panel p-4"
+      style={{
+        border: "1px solid rgba(255,255,255,0.08)",
+        background:
+          `radial-gradient(820px 260px at 18% 0%, rgba(${toneVar},0.10), transparent 62%), ` +
+          "rgba(var(--panel),0.78)",
+      }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="label">{title}</div>
+          <div className="kpi mt-2 leading-tight break-words">{value}</div>
+        </div>
+
+        {icon ? (
+          <div
+            className="h-10 w-10 rounded-2xl flex items-center justify-center shrink-0"
+            style={{
+              background: `rgba(${toneVar},0.14)`,
+              border: `1px solid rgba(${toneVar},0.22)`,
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+              color: "rgb(var(--fg))",
+            }}
+            aria-hidden="true"
+          >
+            <span className="text-base">{icon}</span>
+          </div>
+        ) : null}
+      </div>
+
+      {delta !== undefined && deltaPctVal !== undefined ? (
+        <div className="mt-2">
+          <DeltaPill delta={delta} deltaPctVal={deltaPctVal} />
+        </div>
+      ) : null}
+
+      {subtitle ? <div className="mt-2 text-xs muted">{subtitle}</div> : null}
+    </div>
+  );
+}
+
+function SectionHeader({
+  title,
+  subtitle,
+  right,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div className="min-w-0">
+        <div className="h2">{title}</div>
+        {subtitle ? <div className="subtle mt-1">{subtitle}</div> : null}
+      </div>
+      {right ? <div className="flex items-center gap-2">{right}</div> : null}
+    </div>
+  );
+}
+
+function MetricRow({
+  label,
+  value,
+  pill,
+}: {
+  label: string;
+  value: string;
+  pill?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <div className="text-sm muted">{label}</div>
+      <div className="flex items-center gap-2 shrink-0">
+        <div className="text-sm font-semibold">{value}</div>
+        {pill ? pill : null}
+      </div>
+    </div>
+  );
+}
+
 export default function InsightsPage() {
   const [data, setData] = useState<InsightsOverviewResponse | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -65,9 +187,7 @@ export default function InsightsPage() {
     setErr(null);
     setLoading(true);
     try {
-      const res = await fetch(`/api/insights/overview${qs}`, {
-        credentials: "include",
-      });
+      const res = await fetch(`/api/insights/overview${qs}`, { credentials: "include" });
       const text = await res.text();
 
       let json: any = {};
@@ -103,31 +223,18 @@ export default function InsightsPage() {
   const stores = data?.stores ?? [];
 
   const scopeLabel =
-    (data?.scope?.id === "all" ? "All Stores" : data?.scope?.name) ?? "Store";
-
-  const deltaPill = (delta: number, deltaPctVal: number) => {
-    const up = delta >= 0;
-    return (
-      <span
-        className={cls(
-          "text-xs px-2 py-1 rounded-full whitespace-nowrap",
-          up ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
-        )}
-      >
-        {signedMoney(delta)} ({pct(deltaPctVal)})
-      </span>
-    );
-  };
+    (data?.scope?.id === "all" ? "All Stores" : data?.scope?.name) ??
+    (activeStoreId === "all" ? "All Stores" : "Store");
 
   // ---------- Leaderboards / Movers (All Stores only) ----------
-  const withStoreComputed = useMemo(() => {
+  const computed = useMemo(() => {
     const s = [...stores];
 
-    const todayGross = (x: StoreBlock) => Number(x?.today?.grossRevenue?.value ?? 0);
-    const monthGross = (x: StoreBlock) => Number(x?.month?.grossRevenue?.value ?? 0);
-    const todayPct = (x: StoreBlock) => Number(x?.today?.grossRevenue?.deltaPct ?? 0);
-    const monthPct = (x: StoreBlock) => Number(x?.month?.grossRevenue?.deltaPct ?? 0);
-    const unpaidToday = (x: StoreBlock) => Number(x?.today?.unpaidCount?.value ?? 0);
+    const todayGross = (x: StoreBlock) => safeNumber(x?.today?.grossRevenue?.value ?? 0);
+    const monthGross = (x: StoreBlock) => safeNumber(x?.month?.grossRevenue?.value ?? 0);
+    const todayPct = (x: StoreBlock) => safeNumber(x?.today?.grossRevenue?.deltaPct ?? 0);
+    const monthPct = (x: StoreBlock) => safeNumber(x?.month?.grossRevenue?.deltaPct ?? 0);
+    const unpaidToday = (x: StoreBlock) => safeNumber(x?.today?.unpaidCount?.value ?? 0);
 
     const topTodayGross = s.slice().sort((a, b) => todayGross(b) - todayGross(a))[0] ?? null;
     const topMonthGross = s.slice().sort((a, b) => monthGross(b) - monthGross(a))[0] ?? null;
@@ -137,10 +244,11 @@ export default function InsightsPage() {
 
     const mostUnpaid = s.slice().sort((a, b) => unpaidToday(b) - unpaidToday(a))[0] ?? null;
 
-    const moversToday = s
+    const moversToday = s.slice().sort((a, b) => todayPct(b) - todayPct(a)).slice(0, 8);
+
+    const sortedStoresByMonthGross = s
       .slice()
-      .sort((a, b) => todayPct(b) - todayPct(a))
-      .slice(0, 8);
+      .sort((a, b) => monthGross(b) - monthGross(a));
 
     return {
       topTodayGross,
@@ -149,489 +257,474 @@ export default function InsightsPage() {
       fastestMonth,
       mostUnpaid,
       moversToday,
+      sortedStoresByMonthGross,
     };
   }, [stores]);
 
-  const sortedStoresByMonthGross = useMemo(() => {
-    const copy = [...stores];
-    copy.sort(
-      (a, b) =>
-        Number(b?.month?.grossRevenue?.value ?? 0) -
-        Number(a?.month?.grossRevenue?.value ?? 0)
-    );
-    return copy;
-  }, [stores]);
-
-  const StatCard = ({
+  function StoreStatCard({
     title,
     store,
     primary,
     secondary,
     pill,
+    tone = "brand",
   }: {
     title: string;
     store: StoreBlock | null;
     primary: string;
     secondary?: string;
     pill?: React.ReactNode;
-  }) => {
+    tone?: "brand" | "info" | "success" | "warning";
+  }) {
+    const city = store?.city ? ` • ${store.city}` : "";
     return (
-      <div className="card card-pad min-w-0">
-        <div className="subtle">{title}</div>
-        <div className="mt-1 font-semibold min-w-0">
-          <div className="truncate">
+      <div className="panel p-4">
+        <div className="label">{title}</div>
+
+        <div className="mt-2 min-w-0">
+          <div className="text-sm font-semibold truncate">
             {store ? store.name : "—"}
-            {store?.city ? <span className="text-gray-400"> • {store.city}</span> : null}
+            <span className="muted">{city}</span>
           </div>
         </div>
 
-        <div className="mt-2 text-2xl font-semibold whitespace-nowrap">{primary}</div>
+        <div className="mt-2 text-2xl font-semibold">{primary}</div>
 
-        <div className="mt-2 flex items-start justify-between gap-2">
-          <div className="text-xs text-gray-500 min-w-0 truncate">{secondary ?? ""}</div>
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <div className="text-xs muted min-w-0 truncate">{secondary ?? ""}</div>
           {pill ? <div className="shrink-0">{pill}</div> : null}
         </div>
+
+        {/* subtle tint bar */}
+        <div
+          className="mt-3 h-[2px] rounded-full"
+          style={{
+            background:
+              tone === "info"
+                ? "rgba(var(--info),0.55)"
+                : tone === "success"
+                ? "rgba(var(--success),0.55)"
+                : tone === "warning"
+                ? "rgba(var(--warning),0.55)"
+                : "rgba(var(--brand),0.55)",
+            opacity: 0.6,
+          }}
+        />
       </div>
     );
-  };
-
-  const StoreMini = ({
-    labelLeft,
-    valueLeft,
-    labelRight,
-    valueRight,
-  }: {
-    labelLeft: string;
-    valueLeft: React.ReactNode;
-    labelRight: string;
-    valueRight: React.ReactNode;
-  }) => (
-    <div className="grid grid-cols-2 gap-2">
-      <div className="border rounded-xl p-3 min-w-0">
-        <div className="subtle">{labelLeft}</div>
-        <div className="mt-1 font-semibold whitespace-nowrap">{valueLeft}</div>
-      </div>
-      <div className="border rounded-xl p-3 min-w-0">
-        <div className="subtle">{labelRight}</div>
-        <div className="mt-1 font-semibold whitespace-nowrap">{valueRight}</div>
-      </div>
-    </div>
-  );
+  }
 
   return (
-    <main className="p-4 md:p-6">
+    <main
+      className="p-4 md:p-6"
+      style={{
+        background:
+          "radial-gradient(1100px 520px at 10% 0%, rgba(var(--brand),0.10), transparent 60%)," +
+          "radial-gradient(900px 520px at 90% 0%, rgba(var(--info),0.08), transparent 60%)," +
+          "radial-gradient(900px 520px at 60% 110%, rgba(var(--success),0.06), transparent 60%)",
+      }}
+    >
       <div className="page space-y-4">
-        <div className="flex items-end justify-between gap-3 flex-wrap">
-          <div className="min-w-0">
-            <h1 className="h1">Insights</h1>
-            <p className="subtle truncate">Scope: {scopeLabel}</p>
+        {/* Header */}
+        <div className="card card-pad">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <h1 className="h1">Insights</h1>
+              <p className="subtle truncate">Scope: {scopeLabel}</p>
+            </div>
+
+            <button className="btn btn-secondary w-full sm:w-auto" onClick={load} disabled={loading} type="button">
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
           </div>
 
-          <button
-            className="border px-3 py-2 rounded-lg text-sm"
-            onClick={load}
-            disabled={loading}
-          >
-            {loading ? "Refreshing…" : "Refresh"}
-          </button>
+          {err ? (
+            <div
+              className="mt-3 rounded-xl px-3 py-2 text-sm"
+              style={{
+                background: "rgba(var(--danger),0.16)",
+                border: "1px solid rgba(var(--danger),0.24)",
+              }}
+            >
+              {err}
+            </div>
+          ) : null}
         </div>
 
-        {err && <div className="text-sm text-red-600">{err}</div>}
         {!data && !err && (
-          <div className="subtle">{loading ? "Loading…" : "No data yet."}</div>
+          <div className="panel p-5">
+            <div className="h2">{loading ? "Loading…" : "No data yet"}</div>
+            <div className="subtle mt-1">
+              {activeStoreId ? "If this looks wrong, try Refresh." : "Select a store in the sidebar."}
+            </div>
+          </div>
         )}
 
-        {data && (
+        {data ? (
           <>
-            {/* Today */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="card card-pad min-w-0">
-                <div className="subtle">Today • Gross Revenue</div>
-                <div className="kpi whitespace-nowrap">₹{money(tenantToday?.grossRevenue?.value ?? 0)}</div>
+            {/* TODAY + MONTH summary (layout simplification) */}
+            <div className="card card-pad space-y-4">
+              <SectionHeader
+                title="At a glance"
+                subtitle="Today and month-to-date, with the same visual language as Dashboard."
+                right={
+                  <div className="flex items-center gap-2">
+                    <span className="badge badge-info">Today</span>
+                    <span className="badge">Month</span>
+                  </div>
+                }
+              />
 
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {deltaPill(
-                    tenantToday?.grossRevenue?.delta ?? 0,
-                    tenantToday?.grossRevenue?.deltaPct ?? 0
-                  )}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {/* Today column */}
+                <div className="panel p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-semibold">Today</div>
+                    <span className="badge badge-info">Scope: {scopeLabel}</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <KpiCard
+                      title="Gross revenue"
+                      value={`₹${money(tenantToday?.grossRevenue?.value ?? 0)}`}
+                      delta={tenantToday?.grossRevenue?.delta ?? 0}
+                      deltaPctVal={tenantToday?.grossRevenue?.deltaPct ?? 0}
+                      subtitle={`Paid: ₹${money(tenantToday?.paidRevenue?.value ?? 0)} • Unpaid invoices: ${tenantToday?.unpaidCount?.value ?? 0}`}
+                      tone="brand"
+                      icon="₹"
+                    />
+                    <KpiCard
+                      title="Invoices"
+                      value={`${tenantToday?.invoiceCount?.value ?? 0}`}
+                      delta={tenantToday?.invoiceCount?.delta ?? 0}
+                      deltaPctVal={tenantToday?.invoiceCount?.deltaPct ?? 0}
+                      subtitle={`Avg invoice: ₹${money(tenantToday?.avgInvoiceValue?.value ?? 0)}`}
+                      tone="info"
+                      icon="🧾"
+                    />
+                  </div>
+
+                  <div className="surface-muted p-3">
+                    <MetricRow
+                      label="Paid revenue"
+                      value={`₹${money(tenantToday?.paidRevenue?.value ?? 0)}`}
+                      pill={<DeltaPill delta={tenantToday?.paidRevenue?.delta ?? 0} deltaPctVal={tenantToday?.paidRevenue?.deltaPct ?? 0} />}
+                    />
+                    <div className="mt-2" />
+                    <MetricRow
+                      label="Unpaid invoices"
+                      value={`${tenantToday?.unpaidCount?.value ?? 0}`}
+                      pill={<DeltaPill delta={tenantToday?.unpaidCount?.delta ?? 0} deltaPctVal={tenantToday?.unpaidCount?.deltaPct ?? 0} />}
+                    />
+                  </div>
                 </div>
 
-                <div className="text-xs text-gray-500 mt-2">
-                  Paid: ₹{money(tenantToday?.paidRevenue?.value ?? 0)} • Unpaid invoices:{" "}
-                  {tenantToday?.unpaidCount?.value ?? 0}
-                </div>
-              </div>
+                {/* Month column */}
+                <div className="panel p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-sm font-semibold">Month to date</div>
+                    <span className="badge">This Month</span>
+                  </div>
 
-              <div className="card card-pad min-w-0">
-                <div className="subtle">Today • Invoices</div>
-                <div className="kpi">{tenantToday?.invoiceCount?.value ?? 0}</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <KpiCard
+                      title="Gross revenue"
+                      value={`₹${money(tenantMonth?.grossRevenue?.value ?? 0)}`}
+                      delta={tenantMonth?.grossRevenue?.delta ?? 0}
+                      deltaPctVal={tenantMonth?.grossRevenue?.deltaPct ?? 0}
+                      subtitle="Billed revenue month-to-date."
+                      tone="brand"
+                      icon="₹"
+                    />
+                    <KpiCard
+                      title="Avg invoice"
+                      value={`₹${money(tenantMonth?.avgInvoiceValue?.value ?? 0)}`}
+                      delta={tenantMonth?.avgInvoiceValue?.delta ?? 0}
+                      deltaPctVal={tenantMonth?.avgInvoiceValue?.deltaPct ?? 0}
+                      subtitle={`Invoices: ${tenantMonth?.invoiceCount?.value ?? 0}`}
+                      tone="warning"
+                      icon="∅"
+                    />
+                  </div>
 
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {deltaPill(
-                    tenantToday?.invoiceCount?.delta ?? 0,
-                    tenantToday?.invoiceCount?.deltaPct ?? 0
-                  )}
-                </div>
-
-                <div className="text-xs text-gray-500 mt-2">
-                  Unpaid: {tenantToday?.unpaidCount?.value ?? 0}{" "}
-                  <span className="text-gray-400">•</span> Avg invoice: ₹
-                  {money(tenantToday?.avgInvoiceValue?.value ?? 0)}
-                </div>
-              </div>
-
-              <div className="card card-pad min-w-0">
-                <div className="subtle">Today • Paid Revenue</div>
-                <div className="kpi whitespace-nowrap">₹{money(tenantToday?.paidRevenue?.value ?? 0)}</div>
-
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {deltaPill(
-                    tenantToday?.paidRevenue?.delta ?? 0,
-                    tenantToday?.paidRevenue?.deltaPct ?? 0
-                  )}
-                </div>
-
-                <div className="text-xs text-gray-500 mt-2">
-                  Avg invoice: ₹{money(tenantToday?.avgInvoiceValue?.value ?? 0)}
+                  <div className="surface-muted p-3 space-y-2">
+                    <MetricRow
+                      label="Paid revenue"
+                      value={`₹${money(tenantMonth?.paidRevenue?.value ?? 0)}`}
+                      pill={<DeltaPill delta={tenantMonth?.paidRevenue?.delta ?? 0} deltaPctVal={tenantMonth?.paidRevenue?.deltaPct ?? 0} />}
+                    />
+                    <MetricRow
+                      label="Invoices"
+                      value={`${tenantMonth?.invoiceCount?.value ?? 0}`}
+                      pill={<DeltaPill delta={tenantMonth?.invoiceCount?.delta ?? 0} deltaPctVal={tenantMonth?.invoiceCount?.deltaPct ?? 0} />}
+                    />
+                    <MetricRow
+                      label="Unpaid invoices"
+                      value={`${tenantMonth?.unpaidCount?.value ?? 0}`}
+                      pill={<DeltaPill delta={tenantMonth?.unpaidCount?.delta ?? 0} deltaPctVal={tenantMonth?.unpaidCount?.deltaPct ?? 0} />}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* All Stores: Leaderboards + Movers */}
-            {activeStoreId === "all" && (
+            {/* All Stores: Leaderboards + Movers + Per-store */}
+            {activeStoreId === "all" ? (
               <>
-                <div className="card card-pad">
-                  <div className="h2">Leaderboards</div>
-                  <div className="subtle mt-1">Quick “what’s happening” across the chain.</div>
+                {/* Leaderboards */}
+                <div className="card card-pad space-y-3">
+                  <SectionHeader
+                    title="Leaderboards"
+                    subtitle="Fast “what’s happening” across the chain."
+                    right={<span className="badge badge-info">{stores.length} stores</span>}
+                  />
 
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <StatCard
-                      title="Top Gross • Today"
-                      store={withStoreComputed.topTodayGross}
-                      primary={`₹${money(withStoreComputed.topTodayGross?.today?.grossRevenue?.value ?? 0)}`}
-                      secondary={`Invoices: ${withStoreComputed.topTodayGross?.today?.invoiceCount?.value ?? 0}`}
-                      pill={deltaPill(
-                        withStoreComputed.topTodayGross?.today?.grossRevenue?.delta ?? 0,
-                        withStoreComputed.topTodayGross?.today?.grossRevenue?.deltaPct ?? 0
-                      )}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <StoreStatCard
+                      title="Top gross • Today"
+                      store={computed.topTodayGross}
+                      primary={`₹${money(computed.topTodayGross?.today?.grossRevenue?.value ?? 0)}`}
+                      secondary={`Invoices: ${computed.topTodayGross?.today?.invoiceCount?.value ?? 0}`}
+                      pill={
+                        <DeltaPill
+                          delta={computed.topTodayGross?.today?.grossRevenue?.delta ?? 0}
+                          deltaPctVal={computed.topTodayGross?.today?.grossRevenue?.deltaPct ?? 0}
+                        />
+                      }
+                      tone="brand"
                     />
 
-                    <StatCard
-                      title="Top Gross • This Month"
-                      store={withStoreComputed.topMonthGross}
-                      primary={`₹${money(withStoreComputed.topMonthGross?.month?.grossRevenue?.value ?? 0)}`}
-                      secondary={`Invoices: ${withStoreComputed.topMonthGross?.month?.invoiceCount?.value ?? 0}`}
-                      pill={deltaPill(
-                        withStoreComputed.topMonthGross?.month?.grossRevenue?.delta ?? 0,
-                        withStoreComputed.topMonthGross?.month?.grossRevenue?.deltaPct ?? 0
-                      )}
+                    <StoreStatCard
+                      title="Top gross • Month"
+                      store={computed.topMonthGross}
+                      primary={`₹${money(computed.topMonthGross?.month?.grossRevenue?.value ?? 0)}`}
+                      secondary={`Invoices: ${computed.topMonthGross?.month?.invoiceCount?.value ?? 0}`}
+                      pill={
+                        <DeltaPill
+                          delta={computed.topMonthGross?.month?.grossRevenue?.delta ?? 0}
+                          deltaPctVal={computed.topMonthGross?.month?.grossRevenue?.deltaPct ?? 0}
+                        />
+                      }
+                      tone="brand"
                     />
 
-                    <StatCard
-                      title="Fastest Growth • Today"
-                      store={withStoreComputed.fastestToday}
-                      primary={pct(withStoreComputed.fastestToday?.today?.grossRevenue?.deltaPct ?? null)}
-                      secondary={`Gross: ₹${money(withStoreComputed.fastestToday?.today?.grossRevenue?.value ?? 0)}`}
-                      pill={deltaPill(
-                        withStoreComputed.fastestToday?.today?.grossRevenue?.delta ?? 0,
-                        withStoreComputed.fastestToday?.today?.grossRevenue?.deltaPct ?? 0
-                      )}
-                    />
-
-                    <StatCard
-                      title="Fastest Growth • This Month"
-                      store={withStoreComputed.fastestMonth}
-                      primary={pct(withStoreComputed.fastestMonth?.month?.grossRevenue?.deltaPct ?? null)}
-                      secondary={`Gross: ₹${money(withStoreComputed.fastestMonth?.month?.grossRevenue?.value ?? 0)}`}
-                      pill={deltaPill(
-                        withStoreComputed.fastestMonth?.month?.grossRevenue?.delta ?? 0,
-                        withStoreComputed.fastestMonth?.month?.grossRevenue?.deltaPct ?? 0
-                      )}
-                    />
-
-                    <StatCard
-                      title="Most Unpaid • Today"
-                      store={withStoreComputed.mostUnpaid}
-                      primary={`${withStoreComputed.mostUnpaid?.today?.unpaidCount?.value ?? 0}`}
-                      secondary={`Invoices: ${withStoreComputed.mostUnpaid?.today?.invoiceCount?.value ?? 0}`}
-                      pill={deltaPill(
-                        withStoreComputed.mostUnpaid?.today?.unpaidCount?.delta ?? 0,
-                        withStoreComputed.mostUnpaid?.today?.unpaidCount?.deltaPct ?? 0
-                      )}
+                    <StoreStatCard
+                      title="Most unpaid • Today"
+                      store={computed.mostUnpaid}
+                      primary={`${computed.mostUnpaid?.today?.unpaidCount?.value ?? 0}`}
+                      secondary={`Invoices: ${computed.mostUnpaid?.today?.invoiceCount?.value ?? 0}`}
+                      pill={
+                        <DeltaPill
+                          delta={computed.mostUnpaid?.today?.unpaidCount?.delta ?? 0}
+                          deltaPctVal={computed.mostUnpaid?.today?.unpaidCount?.deltaPct ?? 0}
+                        />
+                      }
+                      tone="warning"
                     />
                   </div>
                 </div>
 
-                {/* Movers: MOBILE cards + DESKTOP table */}
-                <div className="card card-pad">
-                  <div className="h2">Top movers today</div>
-                  <div className="subtle mt-1">
-                    Sorted by Today gross Δ% (highest first). Great for quick follow-ups.
-                  </div>
+                {/* Movers */}
+                <div className="card card-pad space-y-3">
+                  <SectionHeader
+                    title="Top movers today"
+                    subtitle="Sorted by Today gross Δ% (highest first) — quick follow-ups."
+                  />
 
-                  {/* Mobile */}
-                  <div className="mt-3 space-y-3 md:hidden">
-                    {withStoreComputed.moversToday.map((s) => {
+                  {/* Mobile cards */}
+                  <div className="space-y-2 md:hidden">
+                    {computed.moversToday.map((s) => {
                       const td = s.today?.grossRevenue;
                       const unpaid = s.today?.unpaidCount;
-                      const up = (td?.delta ?? 0) >= 0;
-
                       return (
-                        <div key={s.id} className="border rounded-2xl bg-white p-3 space-y-2">
+                        <div key={s.id} className="panel p-4 space-y-2">
                           <div className="min-w-0">
-                            <div className="font-medium truncate">{s.name}</div>
-                            <div className="text-xs text-gray-500 truncate">{s.city ?? ""}</div>
+                            <div className="text-sm font-semibold truncate">{s.name}</div>
+                            <div className="text-xs muted truncate">{s.city ?? "—"}</div>
                           </div>
 
-                          <StoreMini
-                            labelLeft="Today Gross"
-                            valueLeft={`₹${money(td?.value ?? 0)}`}
-                            labelRight="Unpaid"
-                            valueRight={
-                              <span className="text-xs px-2 py-1 rounded-full bg-gray-100">
-                                {unpaid?.value ?? 0}
-                              </span>
-                            }
-                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="surface-muted p-3">
+                              <div className="text-[11px] muted">Today Gross</div>
+                              <div className="text-sm font-semibold">₹{money(td?.value ?? 0)}</div>
+                            </div>
+                            <div className="surface-muted p-3">
+                              <div className="text-[11px] muted">Unpaid</div>
+                              <div className="text-sm font-semibold">{unpaid?.value ?? 0}</div>
+                            </div>
+                          </div>
 
-                          <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <span
-                              className={cls(
-                                "text-xs px-2 py-1 rounded-full whitespace-nowrap",
-                                up ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
-                              )}
-                            >
-                              Δ Gross: {signedMoney(td?.delta ?? 0)}
-                            </span>
-
-                            <span className="text-xs text-gray-600 whitespace-nowrap">
-                              Δ %: {pct(td?.deltaPct ?? null)}
-                            </span>
+                          <div className="flex flex-wrap gap-2">
+                            <DeltaPill delta={td?.delta ?? 0} deltaPctVal={td?.deltaPct ?? 0} />
+                            <span className="badge badge-info">Δ% {pct(td?.deltaPct ?? null)}</span>
                           </div>
                         </div>
                       );
                     })}
 
-                    {withStoreComputed.moversToday.length === 0 && (
-                      <div className="p-4 text-sm text-gray-500">No store data yet.</div>
-                    )}
+                    {computed.moversToday.length === 0 ? (
+                      <div className="panel p-4 text-sm muted">No store data yet.</div>
+                    ) : null}
                   </div>
 
-                  {/* Desktop */}
-                  <div className="mt-3 border rounded-xl overflow-hidden bg-white hidden md:block">
-                    <div className="grid grid-cols-12 bg-gray-50 text-xs font-medium p-3">
-                      <div className="col-span-4">Store</div>
-                      <div className="col-span-2 text-right">Today Gross</div>
-                      <div className="col-span-2 text-right">Δ Gross</div>
-                      <div className="col-span-2 text-right">Δ %</div>
-                      <div className="col-span-2 text-right">Unpaid</div>
-                    </div>
+                  {/* Desktop dark table */}
+                  <div className="hidden md:block">
+                    <div className="table">
+                      <div className="table-head grid-cols-12 px-4 py-3">
+                        <div className="col-span-4">Store</div>
+                        <div className="col-span-2 text-right">Today Gross</div>
+                        <div className="col-span-2 text-right">Δ Gross</div>
+                        <div className="col-span-2 text-right">Δ %</div>
+                        <div className="col-span-2 text-right">Unpaid</div>
+                      </div>
 
-                    {withStoreComputed.moversToday.map((s) => {
+                      {computed.moversToday.map((s) => {
+                        const td = s.today?.grossRevenue;
+                        const unpaid = s.today?.unpaidCount;
+
+                        return (
+                          <div key={s.id} className="table-row grid-cols-12 px-4 py-3">
+                            <div className="col-span-4 min-w-0">
+                              <div className="text-sm font-medium truncate">{s.name}</div>
+                              <div className="text-xs muted truncate">{s.city ?? "—"}</div>
+                            </div>
+
+                            <div className="col-span-2 text-right text-sm font-semibold">
+                              ₹{money(td?.value ?? 0)}
+                            </div>
+
+                            <div className="col-span-2 text-right">
+                              <DeltaPill delta={td?.delta ?? 0} deltaPctVal={td?.deltaPct ?? 0} />
+                            </div>
+
+                            <div className="col-span-2 text-right text-sm">
+                              {pct(td?.deltaPct ?? null)}
+                            </div>
+
+                            <div className="col-span-2 text-right">
+                              <span className="badge">{unpaid?.value ?? 0}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {computed.moversToday.length === 0 ? (
+                        <div className="px-4 py-4 text-sm muted">No store data yet.</div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Per-store breakdown */}
+                <div className="card card-pad space-y-3">
+                  <SectionHeader
+                    title="Per-store breakdown"
+                    subtitle="Sorted by month gross revenue (top performers first)."
+                  />
+
+                  {/* Mobile cards */}
+                  <div className="space-y-2 md:hidden">
+                    {computed.sortedStoresByMonthGross.map((s) => {
                       const td = s.today?.grossRevenue;
-                      const unpaid = s.today?.unpaidCount;
+                      const mo = s.month?.grossRevenue;
 
                       return (
-                        <div key={s.id} className="grid grid-cols-12 p-3 text-sm border-t">
-                          <div className="col-span-4 min-w-0">
-                            <div className="font-medium truncate">{s.name}</div>
-                            <div className="text-xs text-gray-500 truncate">{s.city ?? ""}</div>
+                        <div key={s.id} className="panel p-4 space-y-2">
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold truncate">{s.name}</div>
+                            <div className="text-xs muted truncate">{s.city ?? "—"}</div>
                           </div>
 
-                          <div className="col-span-2 text-right font-medium">
-                            ₹{money(td?.value ?? 0)}
-                          </div>
-
-                          <div className="col-span-2 text-right">
-                            <span
-                              className={cls(
-                                "text-xs px-2 py-1 rounded-full whitespace-nowrap",
-                                (td?.delta ?? 0) >= 0
-                                  ? "bg-green-50 text-green-800"
-                                  : "bg-red-50 text-red-800"
-                              )}
-                            >
-                              {signedMoney(td?.delta ?? 0)}
-                            </span>
-                          </div>
-
-                          <div className="col-span-2 text-right">{pct(td?.deltaPct ?? null)}</div>
-
-                          <div className="col-span-2 text-right">
-                            <span className="text-xs px-2 py-1 rounded-full bg-gray-100 whitespace-nowrap">
-                              {unpaid?.value ?? 0}
-                            </span>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="surface-muted p-3">
+                              <div className="text-[11px] muted">Today Gross</div>
+                              <div className="text-sm font-semibold">₹{money(td?.value ?? 0)}</div>
+                              <div className="mt-2">
+                                <DeltaPill delta={td?.delta ?? 0} deltaPctVal={td?.deltaPct ?? 0} />
+                              </div>
+                            </div>
+                            <div className="surface-muted p-3">
+                              <div className="text-[11px] muted">Month Gross</div>
+                              <div className="text-sm font-semibold">₹{money(mo?.value ?? 0)}</div>
+                              <div className="mt-2">
+                                <DeltaPill delta={mo?.delta ?? 0} deltaPctVal={mo?.deltaPct ?? 0} />
+                              </div>
+                            </div>
                           </div>
                         </div>
                       );
                     })}
 
-                    {withStoreComputed.moversToday.length === 0 && (
-                      <div className="p-4 text-sm text-gray-500">No store data yet.</div>
-                    )}
+                    {computed.sortedStoresByMonthGross.length === 0 ? (
+                      <div className="panel p-4 text-sm muted">No store data yet.</div>
+                    ) : null}
+                  </div>
+
+                  {/* Desktop dark table */}
+                  <div className="hidden md:block">
+                    <div className="table">
+                      <div className="table-head grid-cols-12 px-4 py-3">
+                        <div className="col-span-4">Store</div>
+                        <div className="col-span-2 text-right">Today Gross</div>
+                        <div className="col-span-2 text-right">Δ vs prev</div>
+                        <div className="col-span-2 text-right">Month Gross</div>
+                        <div className="col-span-2 text-right">Δ vs last</div>
+                      </div>
+
+                      {computed.sortedStoresByMonthGross.map((s) => {
+                        const td = s.today?.grossRevenue;
+                        const mo = s.month?.grossRevenue;
+
+                        return (
+                          <div key={s.id} className="table-row grid-cols-12 px-4 py-3">
+                            <div className="col-span-4 min-w-0">
+                              <div className="text-sm font-medium truncate">{s.name}</div>
+                              <div className="text-xs muted truncate">{s.city ?? "—"}</div>
+                            </div>
+
+                            <div className="col-span-2 text-right text-sm font-semibold">
+                              ₹{money(td?.value ?? 0)}
+                            </div>
+
+                            <div className="col-span-2 text-right">
+                              <DeltaPill delta={td?.delta ?? 0} deltaPctVal={td?.deltaPct ?? 0} />
+                            </div>
+
+                            <div className="col-span-2 text-right text-sm font-semibold">
+                              ₹{money(mo?.value ?? 0)}
+                            </div>
+
+                            <div className="col-span-2 text-right">
+                              <DeltaPill delta={mo?.delta ?? 0} deltaPctVal={mo?.deltaPct ?? 0} />
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {computed.sortedStoresByMonthGross.length === 0 ? (
+                        <div className="px-4 py-4 text-sm muted">No store data yet.</div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               </>
-            )}
-
-            {/* Month overview */}
-            <div className="card card-pad">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <div className="h2">Month overview</div>
-                  <div className="subtle mt-1">This month vs last month.</div>
-                </div>
-
-                <div className="shrink-0">
-                  {deltaPill(
-                    tenantMonth?.grossRevenue?.delta ?? 0,
-                    tenantMonth?.grossRevenue?.deltaPct ?? 0
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div className="border rounded-xl p-3">
-                  <div className="subtle">This Month • Gross</div>
-                  <div className="text-lg font-semibold whitespace-nowrap">
-                    ₹{money(tenantMonth?.grossRevenue?.value ?? 0)}
-                  </div>
-                </div>
-
-                <div className="border rounded-xl p-3">
-                  <div className="subtle">This Month • Paid</div>
-                  <div className="text-lg font-semibold whitespace-nowrap">
-                    ₹{money(tenantMonth?.paidRevenue?.value ?? 0)}
-                  </div>
-                </div>
-
-                <div className="border rounded-xl p-3">
-                  <div className="subtle">This Month • Invoices</div>
-                  <div className="text-lg font-semibold">
-                    {tenantMonth?.invoiceCount?.value ?? 0}
-                  </div>
-                </div>
-
-                <div className="border rounded-xl p-3">
-                  <div className="subtle">This Month • Avg Invoice</div>
-                  <div className="text-lg font-semibold whitespace-nowrap">
-                    ₹{money(tenantMonth?.avgInvoiceValue?.value ?? 0)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3 text-xs text-gray-500">
-                Δ Gross: {signedMoney(tenantMonth?.grossRevenue?.delta ?? 0)} (
-                {pct(tenantMonth?.grossRevenue?.deltaPct ?? 0)}){" "}
-                <span className="text-gray-400">•</span> Δ Invoices:{" "}
-                {(tenantMonth?.invoiceCount?.delta ?? 0) >= 0 ? "+" : ""}
-                {tenantMonth?.invoiceCount?.delta ?? 0} (
-                {pct(tenantMonth?.invoiceCount?.deltaPct ?? 0)})
-              </div>
-            </div>
-
-            {/* Per-store breakdown: MOBILE cards + DESKTOP table */}
-            {activeStoreId === "all" && (
-              <div className="card card-pad">
-                <div className="h2">Per-store breakdown</div>
-                <div className="subtle mt-1">
-                  Sorted by this month gross revenue (top performers first).
-                </div>
-
-                {/* Mobile */}
-                <div className="mt-3 space-y-3 md:hidden">
-                  {sortedStoresByMonthGross.map((s) => {
-                    const td = s.today?.grossRevenue;
-                    const mo = s.month?.grossRevenue;
-
-                    return (
-                      <div key={s.id} className="border rounded-2xl bg-white p-3 space-y-2">
-                        <div className="min-w-0">
-                          <div className="font-medium truncate">{s.name}</div>
-                          <div className="text-xs text-gray-500 truncate">{s.city ?? ""}</div>
-                        </div>
-
-                        <StoreMini
-                          labelLeft="Today Gross"
-                          valueLeft={`₹${money(td?.value ?? 0)}`}
-                          labelRight="Month Gross"
-                          valueRight={`₹${money(mo?.value ?? 0)}`}
-                        />
-
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <span className="text-xs text-gray-600 whitespace-nowrap">
-                            Today Δ: {signedMoney(td?.delta ?? 0)} ({pct(td?.deltaPct ?? null)})
-                          </span>
-
-                          <span className="text-xs text-gray-600 whitespace-nowrap">
-                            Month Δ: {signedMoney(mo?.delta ?? 0)} ({pct(mo?.deltaPct ?? null)})
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {sortedStoresByMonthGross.length === 0 && (
-                    <div className="p-4 text-sm text-gray-500">No store data yet.</div>
-                  )}
-                </div>
-
-                {/* Desktop */}
-                <div className="mt-3 border rounded-xl overflow-hidden bg-white hidden md:block">
-                  <div className="grid grid-cols-12 bg-gray-50 text-xs font-medium p-3">
-                    <div className="col-span-4">Store</div>
-                    <div className="col-span-2 text-right">Today Gross</div>
-                    <div className="col-span-2 text-right">Δ vs Yday</div>
-                    <div className="col-span-2 text-right">Month Gross</div>
-                    <div className="col-span-2 text-right">Δ vs L.M.</div>
-                  </div>
-
-                  {sortedStoresByMonthGross.map((s) => {
-                    const td = s.today?.grossRevenue;
-                    const mo = s.month?.grossRevenue;
-
-                    return (
-                      <div key={s.id} className="grid grid-cols-12 p-3 text-sm border-t">
-                        <div className="col-span-4 min-w-0">
-                          <div className="font-medium truncate">{s.name}</div>
-                          <div className="text-xs text-gray-500 truncate">{s.city ?? ""}</div>
-                        </div>
-
-                        <div className="col-span-2 text-right font-medium">
-                          ₹{money(td?.value ?? 0)}
-                        </div>
-
-                        <div className="col-span-2 text-right">
-                          {deltaPill(td?.delta ?? 0, td?.deltaPct ?? 0)}
-                        </div>
-
-                        <div className="col-span-2 text-right font-medium">
-                          ₹{money(mo?.value ?? 0)}
-                        </div>
-
-                        <div className="col-span-2 text-right">
-                          {deltaPill(mo?.delta ?? 0, mo?.deltaPct ?? 0)}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {sortedStoresByMonthGross.length === 0 && (
-                    <div className="p-4 text-sm text-gray-500">No store data yet.</div>
-                  )}
-                </div>
-              </div>
-            )}
+            ) : null}
 
             {/* Debug */}
             <details className="card card-pad">
               <summary className="text-sm cursor-pointer select-none">Debug JSON</summary>
-              <pre className="mt-3 text-xs bg-gray-50 border rounded-lg p-3 overflow-auto">
+              <pre
+                className="mt-3 text-xs rounded-lg p-3 overflow-auto"
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
+              >
                 {JSON.stringify(data, null, 2)}
               </pre>
             </details>
           </>
-        )}
+        ) : null}
       </div>
     </main>
   );

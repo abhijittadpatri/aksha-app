@@ -1,16 +1,18 @@
 // src/app/(app)/patients/[id]/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import Modal from "@/components/ui/Modal";
+import { createPortal } from "react-dom";
 
 /**
- * Patient Detail Page (Dark SaaS)
- * - Uses system tokens from globals.css (dark default + purple accent)
- * - Avoids hardcoded gray/white Tailwind colors for better theme consistency
- * - Keeps all logic/endpoints unchanged
+ * Patient Detail Page (UI simplified + fixed menus + proper modals)
+ * ✅ Same endpoints + logic
+ * ✅ Layout-level simplification across all tabs
+ * ✅ Fix: React key warning (unique keys everywhere)
+ * ✅ Fix: “More” menu not visible (portal popover avoids overflow clipping)
+ * ✅ Restores a reusable Modal component (backdrop + header + body + footer)
  */
 
 type Patient = {
@@ -51,7 +53,7 @@ function safeDate(d: any) {
   }
 }
 
-function statusBadge(kind: "ok" | "warn" | "danger" | "muted", text: string) {
+function statusBadge(kind: "ok" | "warn" | "danger" | "muted" | "info", text: string) {
   const k =
     kind === "ok"
       ? "badge badge-ok"
@@ -59,6 +61,8 @@ function statusBadge(kind: "ok" | "warn" | "danger" | "muted", text: string) {
       ? "badge badge-warn"
       : kind === "danger"
       ? "badge badge-danger"
+      : kind === "info"
+      ? "badge badge-info"
       : "badge";
   return <span className={k}>{text}</span>;
 }
@@ -104,6 +108,223 @@ function SegTab({
         </span>
       ) : null}
     </button>
+  );
+}
+
+function KpiChip({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "info" | "ok" | "warn" | "danger";
+}) {
+  const glow =
+    tone === "info"
+      ? "rgba(var(--info),0.08)"
+      : tone === "ok"
+      ? "rgba(var(--success),0.08)"
+      : tone === "warn"
+      ? "rgba(var(--warning),0.10)"
+      : tone === "danger"
+      ? "rgba(var(--danger),0.10)"
+      : "rgba(255,255,255,0.03)";
+
+  return (
+    <div
+      className="surface-muted px-3 py-2 rounded-2xl"
+      style={{
+        borderRadius: 16,
+        border: "1px solid rgba(255,255,255,0.08)",
+        background:
+          `radial-gradient(600px 160px at 20% 0%, ${glow}, transparent 60%),` +
+          "linear-gradient(180deg, rgba(var(--panel-2),0.92), rgba(var(--panel),0.90))",
+      }}
+    >
+      <div className="text-[11px] muted">{label}</div>
+      <div className="text-sm font-semibold" style={{ color: "rgb(var(--fg))" }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function RowCard({
+  left,
+  mid,
+  right,
+  bottom,
+}: {
+  left: React.ReactNode;
+  mid?: React.ReactNode;
+  right?: React.ReactNode;
+  bottom?: React.ReactNode;
+}) {
+  // IMPORTANT: Do NOT clip popovers/menus. (Your global .panel had overflow:hidden.)
+  return (
+    <div className="panel p-4 space-y-3" style={{ overflow: "visible" }}>
+      <div className="flex flex-col lg:flex-row lg:items-start gap-3">
+        <div className="min-w-0 flex-1">{left}</div>
+        {mid ? <div className="w-full lg:w-[360px] xl:w-[420px]">{mid}</div> : null}
+        {right ? <div className="w-full lg:w-[220px]">{right}</div> : null}
+      </div>
+      {bottom ? <div>{bottom}</div> : null}
+    </div>
+  );
+}
+
+/** Portal popover (fixes “More expands but shows nothing” due to overflow clipping). */
+function PopoverMenu({
+  open,
+  anchorEl,
+  onClose,
+  items,
+}: {
+  open: boolean;
+  anchorEl: HTMLElement | null;
+  onClose: () => void;
+  items: Array<{ id?: string; label: string; onClick: () => void; danger?: boolean; disabled?: boolean }>;
+}) {
+  const [mounted, setMounted] = useState(false);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 240 });
+
+  useEffect(() => setMounted(true), []);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function compute() {
+      const el = anchorEl;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const width = 240;
+      const margin = 10;
+      const left = Math.min(window.innerWidth - width - margin, Math.max(margin, r.right - width));
+      const top = Math.min(window.innerHeight - margin, r.bottom + 8);
+      setPos({ top, left, width });
+    }
+
+    compute();
+    window.addEventListener("resize", compute);
+    window.addEventListener("scroll", compute, true);
+    return () => {
+      window.removeEventListener("resize", compute);
+      window.removeEventListener("scroll", compute, true);
+    };
+  }, [open, anchorEl]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open || !mounted) return null;
+
+  const menu = (
+    <>
+      <div className="fixed inset-0 z-[80]" onMouseDown={onClose} />
+      <div
+        className="fixed z-[90] rounded-xl border p-1 shadow"
+        style={{
+          top: pos.top,
+          left: pos.left,
+          width: pos.width,
+          background: "rgb(var(--panel))",
+          borderColor: "rgba(255,255,255,0.10)",
+          boxShadow: "0 18px 44px rgba(0,0,0,0.55)",
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {items.map((it, idx) => (
+          <button
+            key={it.id ?? `${it.label}-${idx}`}
+            className={cls(
+              "w-full text-left px-3 py-2 text-sm rounded-lg",
+              it.disabled ? "opacity-60 cursor-not-allowed" : "hover:bg-[rgba(255,255,255,0.06)]",
+              it.danger ? "text-[rgb(var(--danger))]" : "text-[rgb(var(--fg))]"
+            )}
+            onClick={() => {
+              if (it.disabled) return;
+              it.onClick();
+              onClose();
+            }}
+            type="button"
+            disabled={it.disabled}
+          >
+            {it.label}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+
+  return createPortal(menu, document.body);
+}
+
+
+/** Reusable Modal wrapper (restores the “missing modal component calling”). */
+function Modal({
+  open,
+  title,
+  subtitle,
+  children,
+  footer,
+  onClose,
+  maxWidthClass = "max-w-3xl",
+}: {
+  open: boolean;
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  footer?: React.ReactNode;
+  onClose: () => void;
+  maxWidthClass?: string;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="fixed inset-0 modal-backdrop" onMouseDown={onClose} />
+      <div
+        ref={containerRef}
+        className={cls("w-full", maxWidthClass, "modal")}
+        style={{ maxHeight: "86vh", overflow: "auto" }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="modal-header px-5 pt-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-lg font-semibold">{title}</div>
+              {subtitle ? <div className="text-xs muted mt-1">{subtitle}</div> : null}
+            </div>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div className="modal-body px-5 pb-4">{children}</div>
+
+        {footer ? <div className="modal-footer px-5 pb-5">{footer}</div> : null}
+      </div>
+    </div>
   );
 }
 
@@ -163,6 +384,12 @@ export default function PatientDetailPage() {
   const [payMode, setPayMode] = useState<string>("Cash");
   const [payErr, setPayErr] = useState<string | null>(null);
   const [paySaving, setPaySaving] = useState(false);
+
+  // ---- UI helpers
+  const [rxExpanded, setRxExpanded] = useState<Record<string, boolean>>({});
+  const [orderMenuFor, setOrderMenuFor] = useState<string | null>(null);
+  const [orderMenuAnchor, setOrderMenuAnchor] = useState<HTMLElement | null>(null);
+
 
   function getActiveStoreId() {
     if (typeof window === "undefined") return null;
@@ -261,7 +488,7 @@ export default function PatientDetailPage() {
   const latestOrder = orders?.[0] ?? null;
   const latestInvoice = invoices?.[0] ?? null;
 
-  const billedOrderIds = useMemo(() => new Set((invoices ?? []).map((iv) => iv.orderId)), [invoices]);
+  const billedOrderIds = useMemo(() => new Set((invoices ?? []).map((iv) => String(iv.orderId))), [invoices]);
 
   const tabMeta = useMemo(() => {
     return {
@@ -481,7 +708,7 @@ export default function PatientDetailPage() {
       if (!storeId) return setInvErr("Select a store in the header to generate invoice.");
       if (!orderId) return setInvErr("OrderId missing.");
 
-      const order = orders.find((x) => x.id === orderId);
+      const order = orders.find((x) => String(x.id) === String(orderId));
       const discount = safeNumber(order?.itemsJson?.breakdown?.discount ?? 0);
 
       const res = await fetch("/api/invoices", {
@@ -519,7 +746,7 @@ export default function PatientDetailPage() {
   async function generateInvoiceFromLatestOrder() {
     const latestOrderId = orders?.[0]?.id;
     if (!latestOrderId) return setInvErr("No orders found. Create an order first.");
-    return generateInvoiceForOrder(latestOrderId);
+    return generateInvoiceForOrder(String(latestOrderId));
   }
 
   function invoiceTotal(inv: any) {
@@ -592,7 +819,7 @@ export default function PatientDetailPage() {
     return m;
   }, [invoices]);
 
-  // ------------------- Overview cards -------------------
+  // ------------------- Overview “next-step” model -------------------
   const overview = useMemo(() => {
     const rxDate = latestRx ? safeDate(latestRx.createdAt) : "";
     const oDate = latestOrder ? safeDate(latestOrder.createdAt) : "";
@@ -609,25 +836,25 @@ export default function PatientDetailPage() {
         value: rxDate || "No Rx yet",
         sub:
           latestRx && (latestRx.rxJson?.pd || latestRx.rxJson?.notes)
-            ? `PD: ${fmt(latestRx.rxJson?.pd)} • ${fmt(latestRx.rxJson?.notes)}`
-            : "Add a prescription to start.",
+            ? `PD: ${fmt(latestRx.rxJson?.pd)} • Notes: ${fmt(latestRx.rxJson?.notes)}`
+            : "Create a prescription to start.",
         pill: latestRx ? statusBadge("ok", "Ready") : statusBadge("muted", "Missing"),
         action: () => {
           setTab("Prescriptions");
           setRxOpen(true);
         },
-        actionLabel: latestRx ? "Add New Rx" : "Create Rx",
+        actionLabel: latestRx ? "Add new Rx" : "Create Rx",
       },
       order: {
         title: "Latest Order",
         value: oDate || "No order yet",
         sub: oc ? `Total ₹${money(oc.total)} • Balance ₹${money(oc.balance)}` : "Create an order (walk-in supported).",
-        pill: latestOrder ? statusBadge("ok", String(latestOrder.status ?? "Draft")) : statusBadge("muted", "Missing"),
+        pill: latestOrder ? statusBadge("info", String(latestOrder.status ?? "Draft")) : statusBadge("muted", "Missing"),
         action: () => {
           setTab("Orders");
           setOrderOpen(true);
         },
-        actionLabel: latestOrder ? "Create New Order" : "Create Order",
+        actionLabel: latestOrder ? "New order" : "Create order",
       },
       invoice: {
         title: "Latest Invoice",
@@ -644,7 +871,7 @@ export default function PatientDetailPage() {
           if (latestInvoice?.id) window.location.href = `/invoices/${latestInvoice.id}`;
           else generateInvoiceFromLatestOrder();
         },
-        actionLabel: latestInvoice ? "Open Invoice" : "Generate Invoice",
+        actionLabel: latestInvoice ? "Open invoice" : "Generate invoice",
       },
     };
   }, [latestRx, latestOrder, latestInvoice, prescriptions, orders, invoices]);
@@ -659,7 +886,7 @@ export default function PatientDetailPage() {
     <main className="p-4 md:p-6">
       <div className="page space-y-4">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
           <div className="min-w-0">
             <Link href="/patients" className="link text-sm">
               ← Back to Patients
@@ -669,13 +896,13 @@ export default function PatientDetailPage() {
             {patient && <div className="subtle truncate">{headerMeta}</div>}
           </div>
 
-          <div className="flex gap-2 w-full md:w-auto">
-            <button className="btn btn-secondary w-full md:w-auto" onClick={loadAll} disabled={loadingAll} type="button">
+          <div className="grid grid-cols-2 gap-2 w-full lg:w-auto">
+            <button className="btn btn-secondary" onClick={loadAll} disabled={loadingAll} type="button">
               {loadingAll ? "Refreshing…" : "Refresh"}
             </button>
 
             <button
-              className="btn btn-primary w-full md:w-auto"
+              className="btn btn-primary"
               type="button"
               onClick={() => {
                 setTab("Prescriptions");
@@ -687,7 +914,13 @@ export default function PatientDetailPage() {
           </div>
         </div>
 
-        {err && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{err}</div>}
+        {err && (
+          <div className="panel p-3">
+            <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>
+              {err}
+            </div>
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="card card-pad">
@@ -709,38 +942,45 @@ export default function PatientDetailPage() {
           </div>
         </div>
 
-        {/* Content */}
+        {/* Content wrapper */}
         <div className="card card-pad">
           {/* ================= OVERVIEW ================= */}
           {tab === "Overview" && (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="panel p-4">
-                  <div className="label">Mobile</div>
-                  <div className="mt-1 text-lg font-semibold truncate">{patient?.mobile ?? "—"}</div>
-                  <div className="mt-2 text-xs muted truncate">{patient?.address ?? "—"}</div>
+              {/* Patient summary + next steps */}
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                <div className="panel p-4" style={{ overflow: "visible" }}>
+                  <div className="label">Patient</div>
+                  <div className="mt-1 text-lg font-semibold truncate">{patient?.name ?? "—"}</div>
+                  <div className="mt-2 text-sm muted truncate">{patient?.address ?? "—"}</div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {patient?.mobile ? statusBadge("info", patient.mobile) : statusBadge("muted", "No mobile")}
+                    {patient?.age ? statusBadge("muted", `${patient.age} yrs`) : null}
+                    {patient?.gender ? statusBadge("muted", patient.gender) : null}
+                  </div>
+                  <div className="mt-3 text-xs muted">
+                    Patient ID: {patient?.id ? String(patient.id).slice(-8) : "—"}
+                  </div>
                 </div>
 
-                <div className="panel p-4">
-                  <div className="label">Age / Gender</div>
-                  <div className="mt-1 text-lg font-semibold">
-                    {patient?.age ? `${patient.age} yrs` : "—"}{" "}
-                    <span style={{ color: "rgb(var(--fg-muted))", fontWeight: 400 }}>
-                      {patient?.gender ? `• ${patient.gender}` : ""}
-                    </span>
-                  </div>
-                  <div className="mt-2 text-xs muted">Patient ID: {patient?.id ? String(patient.id).slice(-8) : "—"}</div>
-                </div>
+                <div className="panel p-4 xl:col-span-2" style={{ overflow: "visible" }}>
+                  <div className="text-sm font-semibold">Next steps</div>
+                  <div className="mt-1 text-sm muted">Prescription → Order → Invoice → Payment → Delivery</div>
 
-                <div className="panel p-4">
-                  <div className="label">Recommended flow</div>
-                  <div className="mt-1 text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
-                    Prescription → Order → Invoice → Payment → Delivery
-                  </div>
-
-                  <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <button
-                      className="btn btn-secondary btn-sm"
+                      className="btn btn-primary w-full"
+                      type="button"
+                      onClick={() => {
+                        setTab("Prescriptions");
+                        setRxOpen(true);
+                      }}
+                    >
+                      + Prescription
+                    </button>
+
+                    <button
+                      className="btn btn-secondary w-full"
                       type="button"
                       onClick={() => {
                         setTab("Orders");
@@ -749,8 +989,9 @@ export default function PatientDetailPage() {
                     >
                       + Order
                     </button>
-                    <button className="btn btn-primary btn-sm" type="button" onClick={generateInvoiceFromLatestOrder}>
-                      + Invoice
+
+                    <button className="btn btn-outline w-full" type="button" onClick={generateInvoiceFromLatestOrder}>
+                      + Invoice (latest order)
                     </button>
                   </div>
 
@@ -758,87 +999,70 @@ export default function PatientDetailPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Latest items */}
+              <div className="space-y-3">
                 {(["rx", "order", "invoice"] as const).map((k) => {
                   const c = overview[k];
                   return (
-                    <div key={k} className="panel p-4 space-y-2">
-                      <div className="flex items-start justify-between gap-2">
+                    <RowCard
+                      key={k}
+                      left={
                         <div className="min-w-0">
-                          <div className="text-sm font-semibold truncate">{c.title}</div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="text-sm font-semibold">{c.title}</div>
+                            <div className="shrink-0">{c.pill}</div>
+                          </div>
                           <div className="text-xs muted truncate">{c.value}</div>
+                          <div className="text-sm mt-1" style={{ color: "rgb(var(--fg-muted))" }}>
+                            {c.sub}
+                          </div>
                         </div>
-                        <div className="shrink-0">{c.pill}</div>
-                      </div>
-
-                      <div className="text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
-                        {c.sub}
-                      </div>
-
-                      <button className="btn btn-secondary w-full" type="button" onClick={c.action}>
-                        {c.actionLabel}
-                      </button>
-                    </div>
+                      }
+                      right={
+                        <div className="flex lg:justify-end">
+                          <button className="btn btn-secondary w-full lg:w-auto" type="button" onClick={c.action}>
+                            {c.actionLabel}
+                          </button>
+                        </div>
+                      }
+                    />
                   );
                 })}
               </div>
 
-              <div className="panel p-4">
-                <div className="text-sm font-semibold">Quick actions</div>
-                <div className="mt-2 flex flex-col md:flex-row gap-2">
-                  <button
-                    className="btn btn-primary"
-                    type="button"
-                    onClick={() => {
-                      setTab("Prescriptions");
-                      setRxOpen(true);
-                    }}
-                  >
-                    Add Prescription
-                  </button>
-
-                  <button
-                    className="btn btn-secondary"
-                    type="button"
-                    onClick={() => {
-                      setTab("Orders");
-                      setOrderOpen(true);
-                    }}
-                  >
-                    Create Order
-                  </button>
-
-                  <button className="btn btn-outline" type="button" onClick={generateInvoiceFromLatestOrder}>
-                    Generate Invoice (Latest Order)
-                  </button>
-                </div>
-
-                {latestOrder?.id ? (
-                  <div className="mt-3 flex flex-col md:flex-row md:items-center gap-2">
-                    <div className="text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
-                      Latest order status: <span style={{ color: "rgb(var(--fg))", fontWeight: 600 }}>{fmt(latestOrder.status ?? "Draft")}</span>
+              {/* Operational shortcuts */}
+              {latestOrder?.id ? (
+                <div className="panel p-4" style={{ overflow: "visible" }}>
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold">Operational status</div>
+                      <div className="text-sm muted">
+                        Latest order:{" "}
+                        <span style={{ color: "rgb(var(--fg))", fontWeight: 600 }}>{fmt(latestOrder.status ?? "Draft")}</span>
+                      </div>
                     </div>
+
                     <div className="flex gap-2">
                       <button
                         className="btn btn-secondary btn-sm"
                         type="button"
-                        disabled={invActionLoading === latestOrder.id}
-                        onClick={() => updateOrderStatus(latestOrder.id, "Ready")}
+                        disabled={invActionLoading === String(latestOrder.id)}
+                        onClick={() => updateOrderStatus(String(latestOrder.id), "Ready")}
                       >
                         Mark Ready
                       </button>
                       <button
                         className="btn btn-secondary btn-sm"
                         type="button"
-                        disabled={invActionLoading === latestOrder.id}
-                        onClick={() => updateOrderStatus(latestOrder.id, "Delivered")}
+                        disabled={invActionLoading === String(latestOrder.id)}
+                        onClick={() => updateOrderStatus(String(latestOrder.id), "Delivered")}
                       >
                         Mark Delivered
                       </button>
                     </div>
                   </div>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -852,49 +1076,95 @@ export default function PatientDetailPage() {
                   <button className="btn btn-secondary" type="button" onClick={loadPrescriptions}>
                     Refresh
                   </button>
-                  <button className="btn btn-secondary btn-sm" type="button" onClick={() => setRxOpen(true)}>
+                  <button className="btn btn-primary" type="button" onClick={() => setRxOpen(true)}>
                     + Add Rx
                   </button>
                 </div>
               </div>
 
-              {rxErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{rxErr}</div>}
-
-              <div className="space-y-3">
-                {prescriptions.map((rx) => (
-                  <div key={rx.id} className="panel p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="text-sm font-semibold">Prescription</div>
-                        <div className="text-xs muted truncate">{safeDate(rx.createdAt)}</div>
-                      </div>
-                      <span className="badge shrink-0">Rx</span>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="surface-muted p-3">
-                        <div className="font-medium text-sm mb-2">Right (OD)</div>
-                        <div className="text-sm">Sphere: {fmt(rx.rxJson?.right?.sphere)}</div>
-                        <div className="text-sm">Cyl: {fmt(rx.rxJson?.right?.cyl)}</div>
-                        <div className="text-sm">Axis: {fmt(rx.rxJson?.right?.axis)}</div>
-                        <div className="text-sm">Add: {fmt(rx.rxJson?.right?.add)}</div>
-                      </div>
-
-                      <div className="surface-muted p-3">
-                        <div className="font-medium text-sm mb-2">Left (OS)</div>
-                        <div className="text-sm">Sphere: {fmt(rx.rxJson?.left?.sphere)}</div>
-                        <div className="text-sm">Cyl: {fmt(rx.rxJson?.left?.cyl)}</div>
-                        <div className="text-sm">Axis: {fmt(rx.rxJson?.left?.axis)}</div>
-                        <div className="text-sm">Add: {fmt(rx.rxJson?.left?.add)}</div>
-                      </div>
-                    </div>
-
-                    <div className="text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
-                      <span style={{ color: "rgb(var(--fg))", fontWeight: 600 }}>PD:</span> {fmt(rx.rxJson?.pd)}{" "}
-                      <span style={{ color: "rgb(var(--fg))", fontWeight: 600 }}>• Notes:</span> {fmt(rx.rxJson?.notes)}
-                    </div>
+              {rxErr && (
+                <div className="panel p-3">
+                  <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>
+                    {rxErr}
                   </div>
-                ))}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {prescriptions.map((rx) => {
+                  const rxId = String(rx.id);
+                  const expanded = !!rxExpanded[rxId];
+                  const right = rx.rxJson?.right ?? {};
+                  const left = rx.rxJson?.left ?? {};
+                  const pdVal = fmt(rx.rxJson?.pd);
+                  const notesVal = fmt(rx.rxJson?.notes);
+
+                  return (
+                    <RowCard
+                      key={rxId}
+                      left={
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="text-sm font-semibold">Prescription</div>
+                            {statusBadge("info", "Rx")}
+                            <div className="text-xs muted">{safeDate(rx.createdAt)}</div>
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <span className="badge">PD: {pdVal}</span>
+                            {notesVal !== "—" ? <span className="badge">Notes: {notesVal}</span> : null}
+                          </div>
+                        </div>
+                      }
+                      mid={
+                        <div className="grid grid-cols-1 gap-2">
+                          <KpiChip
+                            label="OD (Right)"
+                            value={`S ${fmt(right.sphere)} • C ${fmt(right.cyl)} • A ${fmt(right.axis)} • Add ${fmt(right.add)}`}
+                            tone="info"
+                          />
+                          <KpiChip
+                            label="OS (Left)"
+                            value={`S ${fmt(left.sphere)} • C ${fmt(left.cyl)} • A ${fmt(left.axis)} • Add ${fmt(left.add)}`}
+                            tone="neutral"
+                          />
+                        </div>
+                      }
+                      right={
+                        <div className="flex lg:justify-end gap-2">
+                          <button
+                            className="btn btn-secondary btn-sm w-full lg:w-auto"
+                            type="button"
+                            onClick={() => setRxExpanded((m) => ({ ...m, [rxId]: !expanded }))}
+                          >
+                            {expanded ? "Hide details" : "View details"}
+                          </button>
+                        </div>
+                      }
+                      bottom={
+                        expanded ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="surface-muted p-3">
+                              <div className="font-medium text-sm mb-2">Right (OD)</div>
+                              <div className="text-sm">Sphere: {fmt(right.sphere)}</div>
+                              <div className="text-sm">Cyl: {fmt(right.cyl)}</div>
+                              <div className="text-sm">Axis: {fmt(right.axis)}</div>
+                              <div className="text-sm">Add: {fmt(right.add)}</div>
+                            </div>
+
+                            <div className="surface-muted p-3">
+                              <div className="font-medium text-sm mb-2">Left (OS)</div>
+                              <div className="text-sm">Sphere: {fmt(left.sphere)}</div>
+                              <div className="text-sm">Cyl: {fmt(left.cyl)}</div>
+                              <div className="text-sm">Axis: {fmt(left.axis)}</div>
+                              <div className="text-sm">Add: {fmt(left.add)}</div>
+                            </div>
+                          </div>
+                        ) : null
+                      }
+                    />
+                  );
+                })}
 
                 {prescriptions.length === 0 && <div className="panel p-4 text-sm muted">No prescriptions yet.</div>}
               </div>
@@ -917,137 +1187,182 @@ export default function PatientDetailPage() {
                 </div>
               </div>
 
-              {orderErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{orderErr}</div>}
-              {invErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{invErr}</div>}
+              {orderErr && (
+                <div className="panel p-3">
+                  <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>
+                    {orderErr}
+                  </div>
+                </div>
+              )}
+              {invErr && (
+                <div className="panel p-3">
+                  <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>
+                    {invErr}
+                  </div>
+                </div>
+              )}
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {orders.map((o) => {
-                  const billed = billedOrderIds.has(o.id);
+                  const orderId = String(o.id);
+                  const billed = billedOrderIds.has(orderId);
                   const oc = orderComputed(o);
 
-                  const inv = invoiceByOrderId.get(String(o.id)) ?? null;
+                  const inv = invoiceByOrderId.get(orderId) ?? null;
                   const invPS = inv ? invoicePaymentStatus(inv) : null;
                   const invTotal = inv ? invoiceTotal(inv) : 0;
 
+                  // balance display derived from invoice status
                   let displayBalance = oc.balance;
                   if (inv) {
                     const paidAmt = invoiceAmountPaid(inv);
                     const totalAmt = invoiceTotal(inv);
                     const ps = invoicePaymentStatus(inv);
-
                     if (ps === "Paid") displayBalance = 0;
                     else if (ps === "Partial") displayBalance = Math.max(0, totalAmt - paidAmt);
                   }
 
+                  // single primary CTA based on state
+                  let primaryLabel = "Generate Invoice";
+                  let primaryAction = () => generateInvoiceForOrder(orderId);
+                  let primaryKind: "primary" | "secondary" = "primary";
+
+                  if (billed && inv?.id) {
+                    if (invPS === "Paid") {
+                      primaryLabel = "Open Invoice";
+                      primaryAction = () => (window.location.href = `/invoices/${inv.id}`);
+                      primaryKind = "secondary";
+                    } else {
+                      primaryLabel = "Record Payment";
+                      primaryAction = () => openPaymentModal(inv);
+                      primaryKind = "primary";
+                    }
+                  }
+
+                  // pills with guaranteed unique keys (fixes React warning)
+                  const pills: Array<{ key: string; node: React.ReactNode }> = [
+                    { key: `o-status-${orderId}`, node: o.status ? <span className="badge">{String(o.status)}</span> : null },
+                    { key: `o-billed-${orderId}`, node: billed ? statusBadge("ok", "Billed") : statusBadge("warn", "Unbilled") },
+                    ...(invPS
+                      ? [
+                          {
+                            key: `o-pay-${orderId}`,
+                            node:
+                              invPS === "Paid"
+                                ? statusBadge("ok", "Paid")
+                                : invPS === "Partial"
+                                ? statusBadge("warn", "Partial")
+                                : statusBadge("warn", "Unpaid"),
+                          },
+                        ]
+                      : []),
+                  ].filter((p) => p.node != null);
+
                   return (
-                    <div key={o.id} className="panel p-4 space-y-3">
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                    <RowCard
+                      key={orderId}
+                      left={
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <div className="text-sm font-semibold">Order</div>
-
-                            {o.status ? <span className="badge">{String(o.status)}</span> : null}
-                            {billed ? statusBadge("ok", "Billed") : statusBadge("warn", "Unbilled")}
-
-                            {invPS ? (
-                              invPS === "Paid" ? (
-                                statusBadge("ok", "Paid")
-                              ) : invPS === "Partial" ? (
-                                statusBadge("warn", "Partial")
-                              ) : (
-                                statusBadge("warn", "Unpaid")
-                              )
-                            ) : (
-                              <span className="text-xs muted">No invoice</span>
-                            )}
+                            {pills.map((p) => (
+                              <span key={p.key}>{p.node}</span>
+                            ))}
                           </div>
 
+                          <div className="mt-1 text-sm font-semibold">Order</div>
                           <div className="text-xs muted truncate">
-                            {safeDate(o.createdAt)} • Total ₹{money(oc.total)} • Balance ₹{money(displayBalance)}
-                          </div>
-
-                          <div className="text-xs muted">
-                            Order ID: {String(o.id).slice(-6)} • Linked Rx: {o.prescriptionId ?? "—"}
+                            {safeDate(o.createdAt)} • Order ID: {String(o.id).slice(-6)} • Rx: {o.prescriptionId ?? "—"}
                           </div>
 
                           {inv?.invoiceNo ? (
-                            <div className="text-xs muted mt-1">
-                              Invoice: <span style={{ color: "rgb(var(--fg))", fontWeight: 600 }}>{inv.invoiceNo}</span> • ₹{money(invTotal)}
+                            <div className="text-xs muted truncate">
+                              Invoice:{" "}
+                              <span style={{ color: "rgb(var(--fg))", fontWeight: 600 }}>{inv.invoiceNo}</span> • ₹{money(invTotal)}
                             </div>
-                          ) : null}
-                        </div>
-
-                        <div className="flex items-center gap-2 justify-end flex-wrap">
-                          {!billed ? (
-                            <button className="btn btn-outline btn-sm" type="button" onClick={() => generateInvoiceForOrder(o.id)}>
-                              Generate Invoice
-                            </button>
-                          ) : inv?.id ? (
-                            <>
-                              <button
-                                className="btn btn-secondary btn-sm"
-                                type="button"
-                                onClick={() => (window.location.href = `/invoices/${inv.id}`)}
-                              >
-                                Open Invoice
-                              </button>
-                              <button className="btn btn-secondary btn-sm" type="button" onClick={() => openPaymentModal(inv)}>
-                                Record Payment
-                              </button>
-                            </>
                           ) : (
-                            <button className="btn btn-secondary btn-sm" type="button" onClick={loadInvoices}>
-                              Refresh Invoice
-                            </button>
+                            <div className="text-xs muted truncate">Invoice: —</div>
                           )}
-
+                        </div>
+                      }
+                      mid={
+                        <div className="grid grid-cols-3 gap-2">
+                          <KpiChip label="Total" value={`₹${money(inv ? invTotal : oc.total)}`} tone="info" />
+                          <KpiChip label="Advance/Paid" value={`₹${money(inv ? invoiceAmountPaid(inv) : oc.adv)}`} tone="ok" />
+                          <KpiChip
+                            label="Balance"
+                            value={`₹${money(displayBalance)}`}
+                            tone={displayBalance <= 0 ? "ok" : "warn"}
+                          />
+                        </div>
+                      }
+                      right={
+                        <div className="flex flex-col gap-2 lg:items-end">
                           <button
-                            className="btn btn-secondary btn-sm"
+                            className={cls("btn w-full", primaryKind === "primary" ? "btn-primary" : "btn-secondary")}
                             type="button"
-                            disabled={invActionLoading === o.id}
-                            onClick={() => updateOrderStatus(o.id, "Ready")}
-                            title="Operational status"
+                            onClick={primaryAction}
+                            disabled={invActionLoading === orderId}
                           >
-                            {invActionLoading === o.id ? "Updating…" : "Mark Ready"}
+                            {invActionLoading === orderId ? "Working…" : primaryLabel}
                           </button>
 
                           <button
-                            className="btn btn-secondary btn-sm"
+                            className="btn btn-ghost w-full"
                             type="button"
-                            disabled={invActionLoading === o.id}
-                            onClick={() => updateOrderStatus(o.id, "Delivered")}
-                            title="Operational status"
+                            onClick={(e) => {
+                              const nextId = orderMenuFor === orderId ? null : orderId;
+                              setOrderMenuFor(nextId);
+                              setOrderMenuAnchor(nextId ? (e.currentTarget as HTMLElement) : null);
+                            }}
                           >
-                            {invActionLoading === o.id ? "Updating…" : "Mark Delivered"}
+                            More •••
                           </button>
-                        </div>
-                      </div>
 
-                      <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-sm">
-                        {[
-                          { label: "Consult", value: `₹${money(oc.breakdown?.consultationFee ?? 0)}` },
-                          { label: "Frames", value: `₹${money(oc.breakdown?.frames ?? 0)}` },
-                          { label: "Spectacles", value: `₹${money(oc.breakdown?.spectacles ?? 0)}` },
-                          { label: "Discount", value: `₹${money(oc.disc)}` },
-                          { label: "Advance", value: `₹${money(oc.adv)}` },
-                          { label: "Balance", value: `₹${money(displayBalance)}` },
-                        ].map((b) => (
-                          <div key={b.label} className="surface-muted p-2">
-                            <div className="text-xs muted">{b.label}</div>
-                            <div className="font-semibold">{b.value}</div>
-                          </div>
-                        ))}
-                      </div>
+                          <PopoverMenu
+                            open={orderMenuFor === orderId}
+                            anchorEl={orderMenuAnchor}
+                            onClose={() => {
+                              setOrderMenuFor(null);
+                              setOrderMenuAnchor(null);
+                            }}
+                            items={[
+                              {
+                                id: `ready-${orderId}`,
+                                label: "Mark Ready",
+                                onClick: () => updateOrderStatus(orderId, "Ready"),
+                                disabled: invActionLoading === orderId,
+                              },
+                              {
+                                id: `delivered-${orderId}`,
+                                label: "Mark Delivered",
+                                onClick: () => updateOrderStatus(orderId, "Delivered"),
+                                disabled: invActionLoading === orderId,
+                              },
+                              ...(inv?.id
+                                ? [
+                                    {
+                                      id: `openinv-${orderId}`,
+                                      label: "Open Invoice",
+                                      onClick: () => (window.location.href = `/invoices/${inv.id}`),
+                                    },
+                                  ]
+                                : []),
+                            ]}
+                          />
 
-                      {oc.breakdown?.notes ? (
-                        <div className="surface-muted p-3">
-                          <div className="text-xs muted mb-1">Notes</div>
-                          <div className="text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
-                            {String(oc.breakdown.notes)}
-                          </div>
                         </div>
-                      ) : null}
-                    </div>
+                      }
+                      bottom={
+                        oc.breakdown?.notes ? (
+                          <div className="surface-muted p-3">
+                            <div className="text-xs muted mb-1">Notes</div>
+                            <div className="text-sm" style={{ color: "rgb(var(--fg-muted))" }}>
+                              {String(oc.breakdown.notes)}
+                            </div>
+                          </div>
+                        ) : null
+                      }
+                    />
                   );
                 })}
 
@@ -1072,54 +1387,70 @@ export default function PatientDetailPage() {
                 </div>
               </div>
 
-              {invErr && <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>{invErr}</div>}
+              {invErr && (
+                <div className="panel p-3">
+                  <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>
+                    {invErr}
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-2">
                 {invoices.map((inv) => {
+                  const invId = String(inv.id);
                   const total = invoiceTotal(inv);
                   const ps = invoicePaymentStatus(inv);
+                  const paidAmt = invoiceAmountPaid(inv);
+                  const balance = Math.max(0, total - paidAmt);
                   const paymentMode = String(inv?.totalsJson?.paymentMode ?? "Cash");
                   const orderId = inv?.orderId ?? "";
 
+                  const pill =
+                    ps === "Paid"
+                      ? statusBadge("ok", "Paid")
+                      : ps === "Partial"
+                      ? statusBadge("warn", "Partial")
+                      : statusBadge("warn", "Unpaid");
+
                   return (
-                    <div key={inv.id} className="panel p-4 space-y-3">
-                      <div className="flex items-start justify-between gap-3">
+                    <RowCard
+                      key={invId}
+                      left={
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <div className="text-sm font-semibold truncate">{inv.invoiceNo ?? "Invoice"}</div>
-                            {ps === "Paid"
-                              ? statusBadge("ok", "Paid")
-                              : ps === "Partial"
-                              ? statusBadge("warn", "Partial")
-                              : statusBadge("warn", "Unpaid")}
+                            <span key={`pill-${invId}`}>{pill}</span>
                           </div>
                           <div className="text-xs muted truncate">
-                            {safeDate(inv.createdAt)} • Total ₹{money(total)} • Mode: {paymentMode}
+                            {safeDate(inv.createdAt)} • Mode: {paymentMode} • Order: {orderId ? String(orderId).slice(-6) : "—"}
                           </div>
-                          <div className="text-xs muted truncate">Order: {orderId ? String(orderId).slice(-6) : "—"}</div>
                         </div>
+                      }
+                      mid={
+                        <div className="grid grid-cols-3 gap-2">
+                          <KpiChip label="Total" value={`₹${money(total)}`} tone="info" />
+                          <KpiChip label="Paid" value={`₹${money(paidAmt)}`} tone="ok" />
+                          <KpiChip label="Balance" value={`₹${money(balance)}`} tone={balance <= 0 ? "ok" : "warn"} />
+                        </div>
+                      }
+                      right={
+                        <div className="flex flex-col gap-2 lg:items-end">
+                          <a className="btn btn-secondary w-full" href={`/invoices/${invId}`}>
+                            Open
+                          </a>
 
-                        <a className="btn btn-secondary btn-sm shrink-0" href={`/invoices/${inv.id}`}>
-                          Open
-                        </a>
-                      </div>
-
-                      <div className="flex flex-col md:flex-row gap-2">
-                        <button className="btn btn-primary" type="button" onClick={() => openPaymentModal(inv)}>
-                          Record Payment
-                        </button>
-
-                        <button
-                          className="btn btn-secondary"
-                          type="button"
-                          disabled={!orderId || invActionLoading === orderId}
-                          onClick={() => updateOrderStatus(orderId, "Delivered")}
-                          title={!orderId ? "No order linked" : "Updates order status to Delivered"}
-                        >
-                          {invActionLoading === orderId ? "Updating…" : "Mark Delivered"}
-                        </button>
-                      </div>
-                    </div>
+                          {ps !== "Paid" ? (
+                            <button className="btn btn-primary w-full" type="button" onClick={() => openPaymentModal(inv)}>
+                              Record Payment
+                            </button>
+                          ) : (
+                            <button className="btn btn-ghost w-full" type="button" disabled>
+                              Paid
+                            </button>
+                          )}
+                        </div>
+                      }
+                    />
                   );
                 })}
 
@@ -1130,246 +1461,247 @@ export default function PatientDetailPage() {
         </div>
 
         {/* ================= Rx Modal ================= */}
-        
         <Modal
-  open={rxOpen}
-  onClose={() => {
-    if (rxSaving) return;
-    setRxOpen(false);
-    setRxErr(null);
-  }}
-  title="New Prescription"
-  description="Single form • OD & OS sections • Copy between eyes"
-  size="xl"
-  busy={rxSaving}
-  footer={
-    <div className="flex flex-col sm:flex-row gap-2">
-      <button
-        className="btn btn-secondary w-full"
-        type="button"
-        onClick={() => {
-          if (rxSaving) return;
-          resetRxForm();
-          setRxErr(null);
-        }}
-        disabled={rxSaving}
-      >
-        Clear
-      </button>
+          open={rxOpen}
+          title="New Prescription"
+          subtitle="Single form • OD & OS • Copy between eyes"
+          onClose={() => {
+            if (rxSaving) return;
+            setRxOpen(false);
+            setRxErr(null);
+          }}
+          footer={
+            <div className="flex flex-col md:flex-row gap-2">
+              <button className="btn btn-primary w-full" onClick={createPrescription} disabled={rxSaving} type="button">
+                {rxSaving ? "Saving..." : "Save Prescription"}
+              </button>
 
-      <button
-        className="btn btn-primary w-full"
-        type="button"
-        onClick={createPrescription}
-        disabled={rxSaving}
-      >
-        {rxSaving ? "Saving..." : "Save Prescription"}
-      </button>
-    </div>
-  }
->
-  {rxErr && <div className="text-sm text-red-400 mb-3">{rxErr}</div>}
+              <button
+                className="btn btn-secondary w-full"
+                type="button"
+                onClick={() => {
+                  if (rxSaving) return;
+                  resetRxForm();
+                  setRxErr(null);
+                }}
+              >
+                Clear
+              </button>
 
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-    <div className="panel p-3 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="font-medium">Right Eye (OD)</div>
-        <button className="btn btn-secondary btn-sm" type="button" onClick={copyRightToLeft}>
-          Copy → Left
-        </button>
-      </div>
-      <input className="input" placeholder="Sphere" value={rSphere} onChange={(e) => setRSphere(e.target.value)} />
-      <input className="input" placeholder="Cyl" value={rCyl} onChange={(e) => setRCyl(e.target.value)} />
-      <input className="input" placeholder="Axis" value={rAxis} onChange={(e) => setRAxis(e.target.value)} />
-      <input className="input" placeholder="Add" value={rAdd} onChange={(e) => setRAdd(e.target.value)} />
-    </div>
+              <div className="w-full md:w-auto md:ml-auto text-xs muted self-center">
+                Tip: If both eyes are same, fill one side and use “Copy”.
+              </div>
+            </div>
+          }
+        >
+          {rxErr && (
+            <div className="panel p-3 mb-3">
+              <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>
+                {rxErr}
+              </div>
+            </div>
+          )}
 
-    <div className="panel p-3 space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="font-medium">Left Eye (OS)</div>
-        <button className="btn btn-secondary btn-sm" type="button" onClick={copyLeftToRight}>
-          Copy → Right
-        </button>
-      </div>
-      <input className="input" placeholder="Sphere" value={lSphere} onChange={(e) => setLSphere(e.target.value)} />
-      <input className="input" placeholder="Cyl" value={lCyl} onChange={(e) => setLCyl(e.target.value)} />
-      <input className="input" placeholder="Axis" value={lAxis} onChange={(e) => setLAxis(e.target.value)} />
-      <input className="input" placeholder="Add" value={lAdd} onChange={(e) => setLAdd(e.target.value)} />
-    </div>
-  </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="panel p-3 space-y-2" style={{ overflow: "visible" }}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-medium">Right Eye (OD)</div>
+                <button className="btn btn-secondary btn-sm" type="button" onClick={copyRightToLeft}>
+                  Copy → Left
+                </button>
+              </div>
+              <input className="input" placeholder="Sphere" value={rSphere} onChange={(e) => setRSphere(e.target.value)} />
+              <input className="input" placeholder="Cyl" value={rCyl} onChange={(e) => setRCyl(e.target.value)} />
+              <input className="input" placeholder="Axis" value={rAxis} onChange={(e) => setRAxis(e.target.value)} />
+              <input className="input" placeholder="Add" value={rAdd} onChange={(e) => setRAdd(e.target.value)} />
+            </div>
 
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-    <input className="input" placeholder="PD" value={pd} onChange={(e) => setPd(e.target.value)} />
-    <input className="input" placeholder="Notes" value={rxNotes} onChange={(e) => setRxNotes(e.target.value)} />
-  </div>
+            <div className="panel p-3 space-y-2" style={{ overflow: "visible" }}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-medium">Left Eye (OS)</div>
+                <button className="btn btn-secondary btn-sm" type="button" onClick={copyLeftToRight}>
+                  Copy → Right
+                </button>
+              </div>
+              <input className="input" placeholder="Sphere" value={lSphere} onChange={(e) => setLSphere(e.target.value)} />
+              <input className="input" placeholder="Cyl" value={lCyl} onChange={(e) => setLCyl(e.target.value)} />
+              <input className="input" placeholder="Axis" value={lAxis} onChange={(e) => setLAxis(e.target.value)} />
+              <input className="input" placeholder="Add" value={lAdd} onChange={(e) => setLAdd(e.target.value)} />
+            </div>
+          </div>
 
-  <div className="text-xs muted mt-3">Tip: If both eyes are same, fill one side and use “Copy”.</div>
-</Modal>
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+            <input className="input" placeholder="PD" value={pd} onChange={(e) => setPd(e.target.value)} />
+            <input className="input" placeholder="Notes" value={rxNotes} onChange={(e) => setRxNotes(e.target.value)} />
+          </div>
+        </Modal>
 
         {/* ================= Order Modal ================= */}
-<Modal
-  open={orderOpen}
-  onClose={() => {
-    if (orderSaving) return;
-    setOrderOpen(false);
-    setOrderErr(null);
-  }}
-  title="Create Order"
-  description="Split amounts • Auto balance • Walk-in supported"
-  size="xl"
-  busy={orderSaving}
-  footer={
-    <div className="flex flex-col sm:flex-row gap-2">
-      <button
-        className="btn btn-secondary w-full"
-        type="button"
-        onClick={() => {
-          if (orderSaving) return;
-          resetOrderForm();
-          setOrderErr(null);
-        }}
-        disabled={orderSaving}
-      >
-        Clear
-      </button>
+        <Modal
+          open={orderOpen}
+          title="Create Order"
+          subtitle="Split amounts • Auto balance • Walk-in supported"
+          onClose={() => {
+            if (orderSaving) return;
+            setOrderOpen(false);
+            setOrderErr(null);
+          }}
+          footer={
+            <div className="flex flex-col md:flex-row gap-2">
+              <button className="btn btn-primary w-full" onClick={createOrder} disabled={orderSaving} type="button">
+                {orderSaving ? "Saving..." : "Save Order (Draft)"}
+              </button>
 
-      <button
-        className="btn btn-primary w-full"
-        type="button"
-        onClick={createOrder}
-        disabled={orderSaving}
-      >
-        {orderSaving ? "Saving..." : "Save Order (Draft)"}
-      </button>
-    </div>
-  }
->
-  {orderErr && <div className="text-sm text-red-400 mb-3">{orderErr}</div>}
+              <button
+                className="btn btn-secondary w-full"
+                type="button"
+                onClick={() => {
+                  if (orderSaving) return;
+                  resetOrderForm();
+                  setOrderErr(null);
+                }}
+              >
+                Clear
+              </button>
 
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-    <div>
-      <div className="label mb-1">Consultation Fee</div>
-      <input className="input" value={consultFee} onChange={(e) => setConsultFee(e.target.value)} inputMode="decimal" />
-    </div>
-    <div>
-      <div className="label mb-1">Frames</div>
-      <input className="input" value={framesAmt} onChange={(e) => setFramesAmt(e.target.value)} inputMode="decimal" />
-    </div>
-    <div>
-      <div className="label mb-1">Spectacles / Lenses</div>
-      <input className="input" value={spectaclesAmt} onChange={(e) => setSpectaclesAmt(e.target.value)} inputMode="decimal" />
-    </div>
-  </div>
+              <div className="w-full md:w-auto md:ml-auto text-xs muted self-center">
+                Order links to the latest prescription automatically (if present).
+              </div>
+            </div>
+          }
+        >
+          {orderErr && (
+            <div className="panel p-3 mb-3">
+              <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>
+                {orderErr}
+              </div>
+            </div>
+          )}
 
-  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-    <div>
-      <div className="label mb-1">Discount (Flat ₹)</div>
-      <input className="input" value={discountFlat} onChange={(e) => setDiscountFlat(e.target.value)} inputMode="decimal" />
-    </div>
-    <div>
-      <div className="label mb-1">Discount (%)</div>
-      <input className="input" value={discountPct} onChange={(e) => setDiscountPct(e.target.value)} inputMode="decimal" />
-    </div>
-    <div>
-      <div className="label mb-1">Advance Paid</div>
-      <input className="input" value={advancePaid} onChange={(e) => setAdvancePaid(e.target.value)} inputMode="decimal" />
-    </div>
-  </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <div className="label mb-1">Consultation Fee</div>
+              <input className="input" value={consultFee} onChange={(e) => setConsultFee(e.target.value)} placeholder="0" inputMode="decimal" />
+            </div>
+            <div>
+              <div className="label mb-1">Frames</div>
+              <input className="input" value={framesAmt} onChange={(e) => setFramesAmt(e.target.value)} placeholder="0" inputMode="decimal" />
+            </div>
+            <div>
+              <div className="label mb-1">Spectacles / Lenses</div>
+              <input
+                className="input"
+                value={spectaclesAmt}
+                onChange={(e) => setSpectaclesAmt(e.target.value)}
+                placeholder="0"
+                inputMode="decimal"
+              />
+            </div>
+          </div>
 
-  <div className="mt-3">
-    <div className="label mb-1">Notes</div>
-    <input className="input" value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} placeholder="Optional" />
-  </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+            <div>
+              <div className="label mb-1">Discount (Flat ₹)</div>
+              <input className="input" value={discountFlat} onChange={(e) => setDiscountFlat(e.target.value)} placeholder="0" inputMode="decimal" />
+            </div>
+            <div>
+              <div className="label mb-1">Discount (%)</div>
+              <input className="input" value={discountPct} onChange={(e) => setDiscountPct(e.target.value)} placeholder="0" inputMode="decimal" />
+            </div>
+            <div>
+              <div className="label mb-1">Advance Paid</div>
+              <input className="input" value={advancePaid} onChange={(e) => setAdvancePaid(e.target.value)} placeholder="0" inputMode="decimal" />
+            </div>
+          </div>
 
-  <div className="panel p-3 mt-3">
-    <div className="text-sm font-semibold">Summary</div>
-    <div className="mt-2 grid grid-cols-2 md:grid-cols-6 gap-2 text-sm">
-      {[
-        { label: "Subtotal", value: `₹${money(formTotals.subTotal)}` },
-        { label: "Discount", value: `₹${money(formTotals.disc)}` },
-        { label: "Total", value: `₹${money(formTotals.total)}` },
-        { label: "Advance", value: `₹${money(formTotals.adv)}` },
-        { label: "Balance", value: `₹${money(formTotals.balance)}` },
-        { label: "Discount %", value: `${money(formTotals.pct)}%` },
-      ].map((x) => (
-        <div key={x.label} className="surface-muted p-2">
-          <div className="text-xs muted">{x.label}</div>
-          <div className="font-semibold">{x.value}</div>
-        </div>
-      ))}
-    </div>
-  </div>
+          <div className="mt-3">
+            <div className="label mb-1">Notes</div>
+            <input className="input" value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} placeholder="Optional" />
+          </div>
 
-  <div className="text-xs muted mt-3">Order links to the latest prescription automatically (if present).</div>
-</Modal>
-
+          <div className="panel p-3 mt-3" style={{ overflow: "visible" }}>
+            <div className="text-sm font-semibold">Summary</div>
+            <div className="mt-2 grid grid-cols-2 md:grid-cols-6 gap-2 text-sm">
+              {[
+                { label: "Subtotal", value: `₹${money(formTotals.subTotal)}`, tone: "neutral" as const },
+                { label: "Discount", value: `₹${money(formTotals.disc)}`, tone: "warn" as const },
+                { label: "Total", value: `₹${money(formTotals.total)}`, tone: "info" as const },
+                { label: "Advance", value: `₹${money(formTotals.adv)}`, tone: "ok" as const },
+                { label: "Balance", value: `₹${money(formTotals.balance)}`, tone: formTotals.balance <= 0 ? ("ok" as const) : ("warn" as const) },
+                { label: "Discount %", value: `${money(formTotals.pct)}%`, tone: "neutral" as const },
+              ].map((x) => (
+                <div key={x.label} className="surface-muted p-2">
+                  <div className="text-xs muted">{x.label}</div>
+                  <div className="font-semibold">{x.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Modal>
 
         {/* ================= Payment Modal ================= */}
-<Modal
-  open={payOpen}
-  onClose={() => {
-    if (paySaving) return;
-    setPayOpen(false);
-  }}
-  title="Record Payment"
-  description={`Total ₹${money(payTotal)} • Updates invoice Paid/Partial/Unpaid`}
-  size="md"
-  busy={paySaving}
-  footer={
-    <div className="flex flex-col sm:flex-row gap-2">
-      <button
-        className="btn btn-secondary w-full"
-        type="button"
-        onClick={() => setPayAmount(String(payTotal))}
-        disabled={paySaving}
-      >
-        Mark paid (full)
-      </button>
+        <Modal
+          open={payOpen}
+          title="Record Payment"
+          subtitle={`Total ₹${money(payTotal)} • Updates invoice Paid/Partial/Unpaid`}
+          maxWidthClass="max-w-lg"
+          onClose={() => {
+            if (paySaving) return;
+            setPayOpen(false);
+          }}
+          footer={
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button className="btn btn-secondary w-full" type="button" onClick={() => setPayAmount(String(payTotal))} disabled={paySaving}>
+                Mark paid (full)
+              </button>
 
-      <button
-        className="btn btn-primary w-full"
-        type="button"
-        onClick={submitPayment}
-        disabled={paySaving}
-      >
-        {paySaving ? "Saving…" : "Save payment"}
-      </button>
-    </div>
-  }
->
-  {payErr && <div className="text-sm text-red-400 mb-3">{payErr}</div>}
+              <button className="btn btn-primary w-full" type="button" onClick={submitPayment} disabled={paySaving}>
+                {paySaving ? "Saving…" : "Save payment"}
+              </button>
 
-  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-    <div>
-      <div className="label mb-1">Amount paid</div>
-      <input
-        className="input"
-        inputMode="decimal"
-        value={payAmount}
-        onChange={(e) => setPayAmount(e.target.value)}
-        placeholder="0"
-      />
-      <div className="text-[11px] muted mt-1">Tip: For full payment, use “Mark paid (full)”.</div>
-    </div>
+              <div className="w-full sm:w-auto sm:ml-auto text-xs muted self-center">
+                After saving, Orders will reflect Paid/Partial/Unpaid for this order.
+              </div>
+            </div>
+          }
+        >
+          {payErr && (
+            <div className="panel p-3 mb-3">
+              <div className="text-sm" style={{ color: "rgb(var(--danger))" }}>
+                {payErr}
+              </div>
+            </div>
+          )}
 
-    <div>
-      <div className="label mb-1">Payment mode</div>
-      <select className="input" value={payMode} onChange={(e) => setPayMode(e.target.value)}>
-        <option>Cash</option>
-        <option>UPI</option>
-        <option>Card</option>
-        <option>Other</option>
-      </select>
-    </div>
-  </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <div className="label mb-1">Amount paid</div>
+              <input className="input" inputMode="decimal" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="0" />
+              <div className="text-[11px] muted mt-1">Tip: For full payment, use “Mark paid (full)”.</div>
+            </div>
 
-  <div className="text-xs muted mt-3">
-    After saving, Orders will reflect Paid/Partial/Unpaid for this order.
-  </div>
-</Modal>
-
+            <div>
+              <div className="label mb-1">Payment mode</div>
+              <select className="input" value={payMode} onChange={(e) => setPayMode(e.target.value)}>
+                <option>Cash</option>
+                <option>UPI</option>
+                <option>Card</option>
+                <option>Other</option>
+              </select>
+            </div>
+          </div>
+        </Modal>
       </div>
+
+      <style jsx global>{`
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+        .no-scrollbar {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
     </main>
   );
 }

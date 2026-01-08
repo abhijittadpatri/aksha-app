@@ -57,27 +57,66 @@ function DeltaPill({ delta, deltaPctVal }: { delta: number; deltaPctVal: number 
   );
 }
 
-function StatCard({
+function KpiCard({
   label,
   value,
   hint,
   delta,
   deltaPctVal,
+  tone = "brand",
+  icon,
 }: {
   label: string;
   value: string;
   hint?: string;
   delta?: number;
   deltaPctVal?: number;
+  tone?: "brand" | "info" | "success" | "warning";
+  icon?: string;
 }) {
+  const toneVar =
+    tone === "info"
+      ? "var(--info)"
+      : tone === "success"
+      ? "var(--success)"
+      : tone === "warning"
+      ? "var(--warning)"
+      : "var(--brand)";
+
   return (
-    <div className="panel p-4">
-      <div className="label">{label}</div>
+    <div
+      className="panel p-4 transition"
+      style={{
+        border: "1px solid rgba(255,255,255,0.08)",
+        boxShadow:
+          "inset 0 1px 0 rgba(255,255,255,0.05), 0 14px 34px rgba(0,0,0,0.30)",
+        background:
+          `radial-gradient(800px 260px at 20% 0%, rgba(${toneVar},0.10), transparent 60%), ` +
+          "rgba(var(--panel),0.78)",
+      }}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="label">{label}</div>
+          <div className="kpi mt-2 leading-tight break-words">{value}</div>
+        </div>
 
-      {/* Big number should never truncate */}
-      <div className="kpi mt-2 leading-tight break-words">{value}</div>
+        {icon ? (
+          <div
+            className="h-10 w-10 rounded-2xl flex items-center justify-center shrink-0"
+            style={{
+              background: `rgba(${toneVar},0.14)`,
+              border: `1px solid rgba(${toneVar},0.22)`,
+              color: "rgb(var(--fg))",
+              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+            }}
+            aria-hidden="true"
+          >
+            <span className="text-base">{icon}</span>
+          </div>
+        ) : null}
+      </div>
 
-      {/* Delta goes UNDER the number (prevents squish/truncation) */}
       {delta !== undefined && deltaPctVal !== undefined ? (
         <div className="mt-2">
           <DeltaPill delta={delta} deltaPctVal={deltaPctVal} />
@@ -89,6 +128,82 @@ function StatCard({
   );
 }
 
+function SectionHeader({
+  title,
+  subtitle,
+  right,
+}: {
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 flex-wrap">
+      <div className="min-w-0">
+        <div className="h2">{title}</div>
+        {subtitle ? <div className="subtle mt-1">{subtitle}</div> : null}
+      </div>
+      {right ? <div className="flex items-center gap-2">{right}</div> : null}
+    </div>
+  );
+}
+
+function ActionTile({
+  href,
+  title,
+  subtitle,
+  icon,
+  tone = "brand",
+}: {
+  href: string;
+  title: string;
+  subtitle: string;
+  icon: string;
+  tone?: "brand" | "info" | "success" | "warning";
+}) {
+  const toneVar =
+    tone === "info"
+      ? "var(--info)"
+      : tone === "success"
+      ? "var(--success)"
+      : tone === "warning"
+      ? "var(--warning)"
+      : "var(--brand)";
+
+  return (
+    <Link
+      href={href}
+      className="panel p-4 block transition"
+      style={{
+        border: "1px solid rgba(255,255,255,0.08)",
+        background:
+          `radial-gradient(900px 260px at 15% 0%, rgba(${toneVar},0.10), transparent 60%), ` +
+          "rgba(var(--panel),0.76)",
+      }}
+    >
+      <div className="flex items-center gap-3">
+        <div
+          className="h-10 w-10 rounded-2xl flex items-center justify-center shrink-0"
+          style={{
+            background: `rgba(${toneVar},0.14)`,
+            border: `1px solid rgba(${toneVar},0.22)`,
+            boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+          aria-hidden="true"
+        >
+          <span>{icon}</span>
+        </div>
+
+        <div className="min-w-0">
+          <div className="text-sm font-semibold truncate">{title}</div>
+          <div className="text-xs muted truncate">{subtitle}</div>
+        </div>
+
+        <div className="ml-auto text-xs muted">→</div>
+      </div>
+    </Link>
+  );
+}
 
 export default function DashboardPage() {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
@@ -118,9 +233,7 @@ export default function DashboardPage() {
     setErr(null);
     setLoading(true);
     try {
-      const res = await fetch(`/api/insights/overview${qs}`, {
-        credentials: "include",
-      });
+      const res = await fetch(`/api/insights/overview${qs}`, { credentials: "include" });
 
       const text = await res.text();
       let json: any = {};
@@ -164,7 +277,6 @@ export default function DashboardPage() {
     }
     window.addEventListener("storage", onStorage);
 
-    // Same-tab changes: lightweight poll (keeps MVP simple)
     const t = setInterval(() => {
       const current = localStorage.getItem("activeStoreId") || "";
       if (current !== (activeStoreId || "")) load();
@@ -177,7 +289,6 @@ export default function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeStoreId]);
 
-  // Redirect guards
   if (me === null) {
     if (typeof window !== "undefined") window.location.href = "/login";
     return null;
@@ -191,154 +302,192 @@ export default function DashboardPage() {
     (activeStoreId === "all" ? "All Stores" : "Store");
 
   const canSeeInsights = me?.role === "ADMIN" || me?.role === "SHOP_OWNER";
-  const canSeePatients =
-    me?.role === "ADMIN" ||
-    me?.role === "SHOP_OWNER" ||
-    me?.role === "DOCTOR" ||
-    me?.role === "BILLING";
-  const canSeeInvoices =
-    me?.role === "ADMIN" || me?.role === "SHOP_OWNER" || me?.role === "BILLING";
+  const canSeePatients = me?.role === "ADMIN" || me?.role === "SHOP_OWNER" || me?.role === "DOCTOR" || me?.role === "BILLING";
+  const canSeeInvoices = me?.role === "ADMIN" || me?.role === "SHOP_OWNER" || me?.role === "BILLING";
 
   return (
-    <main className="p-4 md:p-6">
+    <main
+      className="p-4 md:p-6"
+      style={{
+        background:
+          "radial-gradient(1100px 520px at 10% 0%, rgba(var(--brand),0.10), transparent 60%)," +
+          "radial-gradient(900px 520px at 90% 0%, rgba(var(--info),0.08), transparent 60%)," +
+          "radial-gradient(900px 520px at 60% 110%, rgba(var(--success),0.06), transparent 60%)",
+      }}
+    >
       <div className="page space-y-4">
         {/* Header */}
-        <div className="flex items-end justify-between gap-3 flex-wrap">
-          <div className="min-w-0">
-            <h1 className="h1">Dashboard</h1>
-            <p className="subtle truncate">
-              Scope: {scopeLabel}
-              {me?.tenant?.name ? ` • ${me.tenant.name}` : ""}
-            </p>
+        <div className="card card-pad">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <h1 className="h1">Dashboard</h1>
+              <p className="subtle truncate">
+                Scope: {scopeLabel}
+                {me?.tenant?.name ? ` • ${me.tenant.name}` : ""}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                className="btn btn-secondary w-full sm:w-auto"
+                onClick={load}
+                disabled={loading}
+                type="button"
+              >
+                {loading ? "Refreshing…" : "Refresh"}
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              className="btn btn-secondary"
-              onClick={load}
-              disabled={loading}
-              title="Refresh"
-              type="button"
+          {err ? (
+            <div
+              className="mt-3 rounded-xl px-3 py-2 text-sm"
+              style={{
+                background: "rgba(var(--danger),0.16)",
+                border: "1px solid rgba(var(--danger),0.24)",
+              }}
             >
-              {loading ? "Refreshing…" : "Refresh"}
-            </button>
-          </div>
+              {err}
+            </div>
+          ) : null}
         </div>
 
-        {err && <div className="text-sm text-red-400">{err}</div>}
-
         {!data && !err && (
-          <div className="panel p-4">
-            <div className="h2">{loading ? "Loading…" : "No data yet."}</div>
+          <div className="panel p-5">
+            <div className="h2">{loading ? "Loading…" : "No data yet"}</div>
             <div className="subtle mt-1">
               {activeStoreId ? "If this looks wrong, try Refresh." : "Select a store in the sidebar."}
             </div>
           </div>
         )}
 
-        {data && (
+        {data ? (
           <>
-            {/* KPI grid */}
+            {/* TODAY */}
             <div className="card card-pad">
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <div>
-                  <div className="h2">Overview</div>
-                  <div className="subtle mt-1">
-                    Today and month-to-date performance for the selected scope.
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="badge">Today</span>
-                  <span className="badge">This Month</span>
-                </div>
-              </div>
+              <SectionHeader
+                title="Today"
+                subtitle="High-signal metrics for what’s happening right now."
+                right={<span className="badge badge-info">Scope: {scopeLabel}</span>}
+              />
 
               <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
-                <StatCard
-                  label="Today • Gross"
+                <KpiCard
+                  label="Gross revenue"
                   value={`₹${money(tenantToday?.grossRevenue?.value ?? 0)}`}
                   delta={tenantToday?.grossRevenue?.delta ?? 0}
                   deltaPctVal={tenantToday?.grossRevenue?.deltaPct ?? 0}
                   hint="Total billed (before payment status)."
+                  tone="brand"
+                  icon="₹"
                 />
-
-                <StatCard
-                  label="Today • Paid"
+                <KpiCard
+                  label="Paid revenue"
                   value={`₹${money(tenantToday?.paidRevenue?.value ?? 0)}`}
                   delta={tenantToday?.paidRevenue?.delta ?? 0}
                   deltaPctVal={tenantToday?.paidRevenue?.deltaPct ?? 0}
                   hint="Collected amount for today."
+                  tone="success"
+                  icon="✓"
                 />
-
-                <StatCard
-                  label="Today • Invoices"
+                <KpiCard
+                  label="Invoices"
                   value={`${tenantToday?.invoiceCount?.value ?? 0}`}
                   hint={`Unpaid: ${tenantToday?.unpaidCount?.value ?? 0}`}
+                  tone="info"
+                  icon="🧾"
                 />
+                <KpiCard
+                  label="Avg invoice"
+                  value={`₹${money(tenantToday?.avgInvoiceValue?.value ?? 0)}`}
+                  delta={tenantToday?.avgInvoiceValue?.delta ?? 0}
+                  deltaPctVal={tenantToday?.avgInvoiceValue?.deltaPct ?? 0}
+                  hint="Average value per invoice today."
+                  tone="warning"
+                  icon="∅"
+                />
+              </div>
+            </div>
 
-                <StatCard
-                  label="This Month • Gross"
+            {/* MONTH */}
+            <div className="card card-pad">
+              <SectionHeader
+                title="Month to date"
+                subtitle="Trends and totals since the start of the month."
+              />
+
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+                <KpiCard
+                  label="Gross revenue"
                   value={`₹${money(tenantMonth?.grossRevenue?.value ?? 0)}`}
                   delta={tenantMonth?.grossRevenue?.delta ?? 0}
                   deltaPctVal={tenantMonth?.grossRevenue?.deltaPct ?? 0}
                   hint="Month-to-date billed revenue."
+                  tone="brand"
+                  icon="₹"
                 />
-              </div>
-
-              {/* Secondary stats */}
-              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div className="surface-muted p-4">
-                  <div className="label">This Month • Paid Revenue</div>
-                  <div className="mt-1 text-xl font-semibold">
-                    ₹{money(tenantMonth?.paidRevenue?.value ?? 0)}
-                  </div>
-                  <div className="mt-2">
-                    <DeltaPill
-                      delta={tenantMonth?.paidRevenue?.delta ?? 0}
-                      deltaPctVal={tenantMonth?.paidRevenue?.deltaPct ?? 0}
-                    />
-                  </div>
-                </div>
-
-                <div className="surface-muted p-4">
-                  <div className="label">This Month • Avg Invoice</div>
-                  <div className="mt-1 text-xl font-semibold">
-                    ₹{money(tenantMonth?.avgInvoiceValue?.value ?? 0)}
-                  </div>
-                  <div className="mt-2">
-                    <DeltaPill
-                      delta={tenantMonth?.avgInvoiceValue?.delta ?? 0}
-                      deltaPctVal={tenantMonth?.avgInvoiceValue?.deltaPct ?? 0}
-                    />
-                  </div>
-                </div>
+                <KpiCard
+                  label="Paid revenue"
+                  value={`₹${money(tenantMonth?.paidRevenue?.value ?? 0)}`}
+                  delta={tenantMonth?.paidRevenue?.delta ?? 0}
+                  deltaPctVal={tenantMonth?.paidRevenue?.deltaPct ?? 0}
+                  hint="Month-to-date collected amount."
+                  tone="success"
+                  icon="✓"
+                />
+                <KpiCard
+                  label="Invoices"
+                  value={`${tenantMonth?.invoiceCount?.value ?? 0}`}
+                  hint={`Unpaid: ${tenantMonth?.unpaidCount?.value ?? 0}`}
+                  tone="info"
+                  icon="🧾"
+                />
+                <KpiCard
+                  label="Avg invoice"
+                  value={`₹${money(tenantMonth?.avgInvoiceValue?.value ?? 0)}`}
+                  delta={tenantMonth?.avgInvoiceValue?.delta ?? 0}
+                  deltaPctVal={tenantMonth?.avgInvoiceValue?.deltaPct ?? 0}
+                  hint="Average value per invoice this month."
+                  tone="warning"
+                  icon="∅"
+                />
               </div>
             </div>
 
-            {/* Quick Actions */}
+            {/* QUICK ACTIONS */}
             <div className="card card-pad">
-              <div className="h2">Quick actions</div>
-              <div className="subtle mt-1">Jump to the most-used pages.</div>
+              <SectionHeader title="Quick actions" subtitle="Jump to the most used pages." />
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                {canSeePatients && (
-                  <Link className="btn btn-primary" href="/patients">
-                    Patients
-                  </Link>
-                )}
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+                {canSeePatients ? (
+                  <ActionTile
+                    href="/patients"
+                    title="Patients"
+                    subtitle="Search, add, and manage patient records."
+                    icon="👥"
+                    tone="brand"
+                  />
+                ) : null}
 
-                {canSeeInvoices && (
-                  <Link className="btn btn-secondary" href="/invoices">
-                    Invoices
-                  </Link>
-                )}
+                {canSeeInvoices ? (
+                  <ActionTile
+                    href="/invoices"
+                    title="Invoices"
+                    subtitle="View invoices, payment status, and totals."
+                    icon="🧾"
+                    tone="info"
+                  />
+                ) : null}
 
-                {canSeeInsights && (
-                  <Link className="btn btn-outline" href="/insights">
-                    Insights
-                  </Link>
-                )}
+                {canSeeInsights ? (
+                  <ActionTile
+                    href="/insights"
+                    title="Insights"
+                    subtitle="Revenue, trends, and performance breakdowns."
+                    icon="📈"
+                    tone="success"
+                  />
+                ) : null}
               </div>
 
               {!activeStoreId ? (
@@ -348,7 +497,7 @@ export default function DashboardPage() {
               ) : null}
             </div>
           </>
-        )}
+        ) : null}
       </div>
     </main>
   );
