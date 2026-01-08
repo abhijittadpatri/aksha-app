@@ -1,48 +1,54 @@
 @import "tailwindcss";
 
 /* =========================================================
-   Aksha SaaS UI System (v4.1 - Dark SaaS Default)
-   - Dark dashboard aesthetic (default, not optional)
-   - Purple accent (brand)
-   - Minimal visible borders; depth via layered surfaces + shadows
-   - Keeps existing utility classes used across app:
+   Aksha SaaS UI System (v5.0 - Dark + Chromatic Semantics)
+   Goal:
+   - Keep a premium dark SaaS base
+   - Add multi-color *semantic* accents (not rainbow)
+   - Improve separation (less “merged” look)
+   - Make KPIs, pills, hovers, CTAs feel alive
+   - Keep existing class API stable:
      .page, .page-narrow, .surface, .surface-muted,
      .card, .card-pad, .panel,
      .btn (+ variants), .input, .badge (+ variants),
      .nav-item, .nav-item-active, .nav-rail,
      .table, .table-head, .table-row
-   - Avoids @apply "group" to prevent Tailwind v4 apply issues
    ========================================================= */
 
 /* -------------------------
-   TOKENS (Default = Dark SaaS)
+   TOKENS
    ------------------------- */
 :root {
   /* Background + surfaces */
-  --bg: 8 11 20; /* app background */
-  --panel: 14 19 32; /* primary surface */
-  --panel-2: 18 25 42; /* elevated surface */
-  --sidebar: 10 14 26; /* sidebar/topbar deep surface */
+  --bg: 7 10 18;          /* app background */
+  --panel: 13 18 32;      /* primary surface */
+  --panel-2: 17 24 44;    /* elevated surface */
+  --sidebar: 9 13 26;     /* sidebar/topbar deep surface */
 
-  /* Separators (very subtle) */
+  /* Separators (subtle) */
   --border: 255 255 255;
-  --border-a: 0.06;
+  --border-a: 0.07;
 
   /* Text */
-  --fg: 230 235 245;
-  --fg-muted: 160 170 190;
-  --fg-subtle: 120 130 150;
+  --fg: 232 236 246;
+  --fg-muted: 164 174 196;
+  --fg-subtle: 124 134 156;
 
   /* Brand (purple) */
-  --brand: 168 85 247; /* purple */
-  --brand-2: 147 51 234; /* hover */
+  --brand: 168 85 247;
+  --brand-2: 147 51 234;
   --ring: var(--brand);
 
-  /* Semantic */
-  --success: 34 197 94;
-  --warning: 245 158 11;
-  --danger: 239 68 68;
-  --info: 96 165 250;
+  /* Semantic palette (chromatic SaaS) */
+  --success: 16 185 129;  /* emerald */
+  --warning: 245 158 11;  /* amber */
+  --danger: 239 68 68;    /* red */
+  --info: 56 189 248;     /* cyan */
+
+  /* Extra accents (used lightly) */
+  --violet: 168 85 247;   /* same as brand */
+  --blue: 96 165 250;
+  --teal: 45 212 191;
 
   /* Shape + motion */
   --r-xl: 18px;
@@ -50,8 +56,10 @@
   --r-md: 12px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 
-  /* Placeholder */
-  --shadow: 0 0 0;
+  /* Shadows */
+  --shadow-1: 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-2: 0 18px 44px rgba(0, 0, 0, 0.42);
+  --shadow-3: 0 30px 90px rgba(0, 0, 0, 0.70);
 }
 
 /* Tailwind v4 inline theme tokens */
@@ -75,7 +83,11 @@ body {
 }
 
 body {
-  background: rgb(var(--bg));
+  background:
+    radial-gradient(1200px 700px at 18% -10%, rgba(var(--brand), 0.10), transparent 55%),
+    radial-gradient(900px 600px at 95% 0%, rgba(var(--info), 0.07), transparent 60%),
+    radial-gradient(900px 600px at 70% 110%, rgba(var(--success), 0.06), transparent 55%),
+    rgb(var(--bg));
   color: rgb(var(--fg));
   font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
@@ -103,7 +115,6 @@ a.link:hover {
 /* =========================================================
    Layout helpers
    ========================================================= */
-
 .page {
   @apply max-w-6xl mx-auto;
 }
@@ -112,68 +123,77 @@ a.link:hover {
 }
 
 /* =========================================================
-   Surfaces
+   Surfaces (more separation + subtle chroma)
    ========================================================= */
-
 .surface {
-  background: linear-gradient(180deg, rgba(var(--panel), 1), rgba(var(--panel-2), 0.92));
+  position: relative;
+  background:
+    radial-gradient(900px 320px at 18% 0%, rgba(var(--brand), 0.10), transparent 60%),
+    linear-gradient(180deg, rgba(var(--panel), 1), rgba(var(--panel-2), 0.92));
   border-radius: var(--r-xl);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.04),
-    0 18px 40px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow-1), var(--shadow-2);
+  overflow: hidden;
+}
+.surface::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 35%);
+  opacity: 0.7;
 }
 
 .surface-muted {
-  background: linear-gradient(180deg, rgba(var(--panel-2), 0.95), rgba(var(--panel), 0.92));
-  border-radius: var(--r-xl);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-/* =========================================================
-   Modal system (Dark SaaS)
-   ========================================================= */
-
-.modal-backdrop {
-  background: rgba(3, 6, 18, 0.82);
-  backdrop-filter: blur(6px);
-}
-
-
-.modal {
-  /* Keep your base surface */
-  background: linear-gradient(180deg, rgba(var(--panel), 1), rgba(var(--panel-2), 1));
-  border-radius: var(--r-xl);
-
-  /* Add a “rim” that separates it from background */
-  border: 1px solid rgba(255, 255, 255, 0.07);
-
-  /* The magic: layered shadows + subtle brand glow + inner highlight */
-  box-shadow:
-    0 30px 80px rgba(0, 0, 0, 0.70),
-    0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 0 0 2px rgba(var(--brand), 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-
   position: relative;
+  background:
+    radial-gradient(700px 240px at 20% 0%, rgba(var(--info), 0.07), transparent 60%),
+    linear-gradient(180deg, rgba(var(--panel-2), 0.96), rgba(var(--panel), 0.92));
+  border-radius: var(--r-xl);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   overflow: hidden;
 }
 
-/* Optional: a soft top “sheen” so it feels elevated */
+/* =========================================================
+   Modal system (separates clearly from background)
+   ========================================================= */
+.modal-backdrop {
+  background: rgba(3, 6, 18, 0.86);
+  backdrop-filter: blur(8px);
+}
+
+.modal {
+  position: relative;
+  overflow: hidden;
+
+  background:
+    radial-gradient(1000px 360px at 18% 0%, rgba(var(--brand), 0.16), transparent 60%),
+    radial-gradient(900px 320px at 90% 0%, rgba(var(--info), 0.10), transparent 58%),
+    linear-gradient(180deg, rgba(var(--panel), 1), rgba(var(--panel-2), 1));
+
+  border-radius: var(--r-xl);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+
+  box-shadow:
+    var(--shadow-3),
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 0 2px rgba(var(--brand), 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* Soft sheen */
 .modal::before {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(900px 260px at 20% 0%,
-      rgba(var(--brand), 0.18),
-      transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,0.05), transparent 40%);
-  opacity: 0.85;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 42%),
+    radial-gradient(900px 260px at 20% 0%, rgba(var(--brand), 0.14), transparent 60%);
+  opacity: 0.9;
 }
-
 
 /* Optional helpers for the reusable Modal component */
 .modal-header {
@@ -182,8 +202,8 @@ a.link:hover {
   z-index: 1;
   padding-bottom: 0.5rem;
   background: rgba(var(--panel), 0.92);
-  backdrop-filter: blur(6px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .modal-body {
@@ -192,13 +212,12 @@ a.link:hover {
 
 .modal-footer {
   padding-top: 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* =========================================================
    Typography
    ========================================================= */
-
 .h1 {
   @apply text-2xl md:text-3xl font-semibold tracking-tight;
 }
@@ -217,17 +236,43 @@ a.link:hover {
   color: rgb(var(--fg-muted));
 }
 
-/* =========================================================
-   Cards / Panels
-   ========================================================= */
+/* Make key numbers “premium” */
+.kpi {
+  @apply text-2xl md:text-3xl font-semibold tracking-tight;
+  letter-spacing: -0.02em;
+  text-shadow: 0 10px 26px rgba(0,0,0,0.35);
+}
 
+/* Tiny inline accents (optional utility) */
+.text-success { color: rgb(var(--success)); }
+.text-warning { color: rgb(var(--warning)); }
+.text-danger  { color: rgb(var(--danger)); }
+.text-info    { color: rgb(var(--info)); }
+
+/* =========================================================
+   Cards / Panels (more depth, less merging)
+   ========================================================= */
 .card {
-  background: linear-gradient(180deg, rgba(var(--panel), 1), rgba(var(--panel-2), 0.92));
+  position: relative;
+  overflow: hidden;
+
+  background:
+    radial-gradient(800px 280px at 14% 0%, rgba(var(--brand), 0.10), transparent 60%),
+    linear-gradient(180deg, rgba(var(--panel), 1), rgba(var(--panel-2), 0.92));
+
   border-radius: var(--r-xl);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.04),
-    0 18px 40px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+
+  box-shadow: var(--shadow-1), var(--shadow-2);
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 36%);
+  opacity: 0.75;
 }
 
 .card-pad {
@@ -238,24 +283,24 @@ a.link:hover {
 }
 
 .panel {
-  background: rgba(var(--panel), 0.78);
+  position: relative;
+  overflow: hidden;
+
+  background:
+    radial-gradient(700px 240px at 20% 0%, rgba(var(--info), 0.07), transparent 62%),
+    rgba(var(--panel), 0.74);
+
   border-radius: var(--r-xl);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 16px 34px rgba(0, 0, 0, 0.28);
 }
 
 /* =========================================================
-   KPI
+   Buttons (more distinct & semantic)
    ========================================================= */
-
-.kpi {
-  @apply text-2xl md:text-3xl font-semibold tracking-tight;
-}
-
-/* =========================================================
-   Buttons (STANDARDIZED)
-   ========================================================= */
-
 .btn {
   @apply inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium;
   border-radius: var(--r-md);
@@ -302,80 +347,76 @@ a.link:hover {
   height: 34px;
 }
 
-/* Primary = purple (use for the ONE main CTA per section) */
+/* Primary = purple (main CTA) */
 .btn-primary {
-  background: linear-gradient(
-    180deg,
-    rgba(var(--brand), 1),
-    rgba(var(--brand-2), 1)
-  );
+  background:
+    radial-gradient(120% 140% at 20% 0%, rgba(255,255,255,0.18), transparent 45%),
+    linear-gradient(180deg, rgba(var(--brand), 1), rgba(var(--brand-2), 1));
   color: white;
-  box-shadow:
-    0 10px 26px rgba(var(--brand), 0.32),
-    inset 0 1px 0 rgba(255,255,255,0.18);
-}
 
+  border-color: rgba(255,255,255,0.10);
+  box-shadow:
+    0 14px 34px rgba(var(--brand), 0.28),
+    inset 0 1px 0 rgba(255,255,255,0.20);
+}
 .btn-primary:hover {
-  filter: brightness(1.05);
+  filter: brightness(1.06);
   box-shadow:
-    0 14px 36px rgba(var(--brand), 0.38),
-    inset 0 1px 0 rgba(255,255,255,0.22);
+    0 18px 44px rgba(var(--brand), 0.34),
+    inset 0 1px 0 rgba(255,255,255,0.24);
 }
 
-
-/* Secondary = neutral filled (default action button) */
+/* Secondary = cool neutral filled (distinct from background) */
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.085);
-  border-color: rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(120% 160% at 20% 0%, rgba(255,255,255,0.10), transparent 52%),
+    rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.16);
   color: rgb(var(--fg));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.07);
 }
-
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.18);
+  background:
+    radial-gradient(120% 160% at 20% 0%, rgba(255,255,255,0.14), transparent 52%),
+    rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.20);
 }
 
-
-/* Ghost = transparent toolbar button (NOT input-like) */
+/* Ghost = toolbar button */
 .btn-ghost {
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.10);
+  background: rgba(255,255,255,0.03);
+  border-color: rgba(255, 255, 255, 0.12);
   color: rgb(var(--fg-muted));
 }
-
 .btn-ghost:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255,255,255,0.06);
   border-color: rgba(255, 255, 255, 0.18);
   color: rgb(var(--fg));
 }
-
 
 /* Outline = accent outlined */
 .btn-outline {
   background: transparent;
-  border-color: rgba(var(--brand), 0.55);
+  border-color: rgba(var(--brand), 0.60);
   color: rgb(var(--fg));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
-
 .btn-outline:hover {
   background: rgba(var(--brand), 0.14);
-  border-color: rgba(var(--brand), 0.75);
+  border-color: rgba(var(--brand), 0.78);
 }
-
 
 /* Soft = gentle accent fill */
 .btn-soft {
-  background: rgba(var(--brand), 0.18);
-  border-color: rgba(var(--brand), 0.28);
+  background: rgba(var(--brand), 0.20);
+  border-color: rgba(var(--brand), 0.30);
   color: rgb(var(--fg));
 }
-
 .btn-soft:hover {
-  background: rgba(var(--brand), 0.24);
-  border-color: rgba(var(--brand), 0.36);
+  background: rgba(var(--brand), 0.26);
+  border-color: rgba(var(--brand), 0.38);
 }
-
 
 /* Link button */
 .btn-link {
@@ -392,16 +433,71 @@ a.link:hover {
 
 /* Danger */
 .btn-danger {
-  background: rgba(var(--danger), 0.18);
-  border-color: rgba(var(--danger), 0.30);
+  background:
+    radial-gradient(120% 160% at 20% 0%, rgba(255,255,255,0.10), transparent 55%),
+    rgba(var(--danger), 0.20);
+  border-color: rgba(var(--danger), 0.32);
   color: rgb(var(--fg));
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
 }
-
 .btn-danger:hover {
-  background: rgba(var(--danger), 0.26);
+  background:
+    radial-gradient(120% 160% at 20% 0%, rgba(255,255,255,0.14), transparent 55%),
+    rgba(var(--danger), 0.28);
+  border-color: rgba(var(--danger), 0.40);
 }
 
+/* NEW: semantic action buttons (optional; use when you want more color variety) */
+.btn-success {
+  background:
+    radial-gradient(120% 160% at 20% 0%, rgba(255,255,255,0.14), transparent 55%),
+    rgba(var(--success), 0.18);
+  border-color: rgba(var(--success), 0.30);
+  color: rgb(var(--fg));
+  box-shadow:
+    0 10px 26px rgba(var(--success), 0.14),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.btn-success:hover {
+  background:
+    radial-gradient(120% 160% at 20% 0%, rgba(255,255,255,0.18), transparent 55%),
+    rgba(var(--success), 0.24);
+  border-color: rgba(var(--success), 0.38);
+}
+
+.btn-info {
+  background:
+    radial-gradient(120% 160% at 20% 0%, rgba(255,255,255,0.14), transparent 55%),
+    rgba(var(--info), 0.18);
+  border-color: rgba(var(--info), 0.30);
+  color: rgb(var(--fg));
+  box-shadow:
+    0 10px 26px rgba(var(--info), 0.12),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.btn-info:hover {
+  background:
+    radial-gradient(120% 160% at 20% 0%, rgba(255,255,255,0.18), transparent 55%),
+    rgba(var(--info), 0.24);
+  border-color: rgba(var(--info), 0.38);
+}
+
+.btn-warn {
+  background:
+    radial-gradient(120% 160% at 20% 0%, rgba(255,255,255,0.14), transparent 55%),
+    rgba(var(--warning), 0.18);
+  border-color: rgba(var(--warning), 0.32);
+  color: rgb(var(--fg));
+  box-shadow:
+    0 10px 26px rgba(var(--warning), 0.12),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+}
+.btn-warn:hover {
+  background:
+    radial-gradient(120% 160% at 20% 0%, rgba(255,255,255,0.18), transparent 55%),
+    rgba(var(--warning), 0.24);
+  border-color: rgba(var(--warning), 0.40);
+}
 
 /* Focus ring */
 .btn:focus-visible,
@@ -410,24 +506,22 @@ select.input:focus-visible,
 textarea.input:focus-visible,
 .nav-item:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(var(--ring), 0.25);
+  box-shadow: 0 0 0 3px rgba(var(--ring), 0.26);
   border-color: rgba(var(--ring), 0.60);
 }
 
 /* =========================================================
    Nav items (Sidebar + lists)
-   - No @apply group (avoids Tailwind v4 apply error)
    ========================================================= */
-
 .nav-item {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 0.75rem; /* gap-3 */
-  padding: 0.5rem 0.75rem; /* py-2 px-3 */
-  border-radius: 0.9rem; /* ~rounded-xl */
-  font-size: 0.875rem; /* text-sm */
-  transition: background-color 160ms var(--ease), color 160ms var(--ease);
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.9rem;
+  font-size: 0.875rem;
+  transition: background-color 160ms var(--ease), color 160ms var(--ease), box-shadow 160ms var(--ease);
   color: rgb(var(--fg-muted));
 }
 
@@ -437,9 +531,12 @@ textarea.input:focus-visible,
 }
 
 .nav-item-active {
-  background: rgba(var(--brand), 0.16);
+  background:
+    radial-gradient(120% 180% at 16% 0%, rgba(var(--brand), 0.24), transparent 60%),
+    rgba(var(--brand), 0.14);
   color: rgb(var(--fg));
   font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
 }
 
 .nav-rail {
@@ -461,17 +558,22 @@ textarea.input:focus-visible,
 /* =========================================================
    Inputs
    ========================================================= */
-
 .input {
   @apply w-full px-3 py-2 text-sm;
   border-radius: var(--r-md);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+
+  background:
+    radial-gradient(120% 180% at 20% 0%, rgba(255,255,255,0.08), transparent 55%),
+    rgba(255, 255, 255, 0.045);
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: rgb(var(--fg));
+
   transition:
     border-color 160ms var(--ease),
     box-shadow 160ms var(--ease),
-    background-color 160ms var(--ease);
+    background-color 160ms var(--ease),
+    filter 160ms var(--ease);
 }
 
 .input::placeholder {
@@ -479,79 +581,120 @@ textarea.input:focus-visible,
 }
 
 .input:hover {
-  background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(120% 180% at 20% 0%, rgba(255,255,255,0.10), transparent 55%),
+    rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 select.input {
   @apply appearance-none;
 }
 
+/* IMPORTANT:
+   Many browsers render <option> dropdown menus using OS UI (often white).
+   This CSS helps some browsers, but Safari/Windows may still show white options.
+*/
+select.input,
+select.input option {
+  color: rgb(var(--fg));
+  background-color: rgb(var(--panel));
+}
+
 /* =========================================================
    Tables (grid-based)
    ========================================================= */
-
 .table {
   @apply w-full overflow-hidden;
-  background: rgb(var(--panel));
+  background:
+    radial-gradient(900px 340px at 18% 0%, rgba(var(--brand), 0.08), transparent 62%),
+    rgb(var(--panel));
   border-radius: var(--r-xl);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .table-head {
   @apply grid text-xs font-semibold uppercase tracking-wide;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.05);
   color: rgb(var(--fg-muted));
 }
 
 .table-row {
   @apply grid text-sm;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.table-row:hover {
+  background: rgba(255,255,255,0.03);
 }
 
 /* =========================================================
-   Badges / Pills
+   Badges / Pills (semantic, more visible)
    ========================================================= */
-
 .badge {
   @apply inline-flex items-center rounded-full px-2 py-1 text-[11px];
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(var(--fg), 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(var(--fg), 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
 }
 
 .badge-ok {
-  background: rgba(var(--success), 0.16);
-  border: 1px solid rgba(var(--success), 0.22);
+  background:
+    radial-gradient(120% 160% at 18% 0%, rgba(255,255,255,0.10), transparent 60%),
+    rgba(var(--success), 0.18);
+  border: 1px solid rgba(var(--success), 0.30);
   color: rgb(var(--fg));
 }
+
 .badge-warn {
-  background: rgba(var(--warning), 0.18);
-  border: 1px solid rgba(var(--warning), 0.26);
+  background:
+    radial-gradient(120% 160% at 18% 0%, rgba(255,255,255,0.10), transparent 60%),
+    rgba(var(--warning), 0.20);
+  border: 1px solid rgba(var(--warning), 0.34);
   color: rgb(var(--fg));
 }
+
 .badge-danger {
-  background: rgba(var(--danger), 0.16);
-  border: 1px solid rgba(var(--danger), 0.26);
+  background:
+    radial-gradient(120% 160% at 18% 0%, rgba(255,255,255,0.10), transparent 60%),
+    rgba(var(--danger), 0.20);
+  border: 1px solid rgba(var(--danger), 0.34);
   color: rgb(var(--fg));
 }
+
 .badge-info {
-  background: rgba(var(--info), 0.16);
-  border: 1px solid rgba(var(--info), 0.26);
+  background:
+    radial-gradient(120% 160% at 18% 0%, rgba(255,255,255,0.10), transparent 60%),
+    rgba(var(--info), 0.18);
+  border: 1px solid rgba(var(--info), 0.30);
   color: rgb(var(--fg));
 }
+
+/* Optional “status pills” for places that currently use badges */
+.pill {
+  @apply inline-flex items-center rounded-full px-2.5 py-1 text-[12px] font-medium;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgb(var(--fg));
+}
+.pill-success { background: rgba(var(--success),0.18); border-color: rgba(var(--success),0.30); }
+.pill-warning { background: rgba(var(--warning),0.20); border-color: rgba(var(--warning),0.34); }
+.pill-danger  { background: rgba(var(--danger),0.20);  border-color: rgba(var(--danger),0.34); }
+.pill-info    { background: rgba(var(--info),0.18);    border-color: rgba(var(--info),0.30); }
 
 /* =========================================================
    Small UX niceties
    ========================================================= */
-
 *::-webkit-scrollbar {
   height: 10px;
   width: 10px;
 }
 *::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.16);
   border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 *::-webkit-scrollbar-track {
   background: transparent;

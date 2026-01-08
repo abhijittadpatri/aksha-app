@@ -1,8 +1,67 @@
 // src/app/login/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+
+function cls(...xs: Array<string | false | null | undefined>) {
+  return xs.filter(Boolean).join(" ");
+}
+
+function EmailIcon(props: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={props.className}
+      fill="none"
+    >
+      <path
+        d="M4.5 7.5A3 3 0 0 1 7.5 4.5h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3v-9Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        opacity="0.9"
+      />
+      <path
+        d="m6.8 8.2 4.4 3.3c.5.38 1.2.38 1.7 0l4.4-3.3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function LockIcon(props: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className={props.className}
+      fill="none"
+    >
+      <path
+        d="M7.5 10.5V8.3a4.5 4.5 0 1 1 9 0v2.2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path
+        d="M6.5 10.5h11A2.5 2.5 0 0 1 20 13v5.5A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5V13a2.5 2.5 0 0 1 2.5-2.5Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        opacity="0.95"
+      />
+      <path
+        d="M12 14.2v3"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -10,6 +69,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [showPw, setShowPw] = useState(false);
+
+  const canSubmit = useMemo(() => {
+    const e = email.trim().toLowerCase();
+    return e.length > 0 && password.length >= 6 && !busy;
+  }, [email, password, busy]);
 
   async function submit() {
     setErr(null);
@@ -52,7 +117,15 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-[100dvh] flex items-center justify-center p-6">
+    <main
+      className="min-h-[100dvh] flex items-center justify-center px-4 py-8"
+      style={{
+        background:
+          "radial-gradient(1100px 520px at 10% 5%, rgba(var(--brand),0.20), transparent 60%)," +
+          "radial-gradient(900px 520px at 90% 0%, rgba(var(--info),0.14), transparent 60%)," +
+          "radial-gradient(900px 520px at 60% 110%, rgba(var(--success),0.10), transparent 60%)",
+      }}
+    >
       <div className="w-full max-w-md">
         {/* Brand header */}
         <div className="mb-5">
@@ -61,7 +134,7 @@ export default function LoginPage() {
               className="h-11 w-11 rounded-2xl"
               style={{
                 background:
-                  "radial-gradient(120% 120% at 30% 20%, rgba(var(--brand),0.60), rgba(var(--brand),0.10))",
+                  "radial-gradient(120% 120% at 30% 20%, rgba(var(--brand),0.70), rgba(var(--brand),0.12))",
                 boxShadow:
                   "0 18px 45px rgba(var(--brand),0.18), inset 0 1px 0 rgba(255,255,255,0.10)",
                 border: "1px solid rgba(255,255,255,0.10)",
@@ -69,30 +142,22 @@ export default function LoginPage() {
             />
             <div className="min-w-0">
               <div className="text-lg font-semibold leading-tight">Aksha</div>
-              <div className="text-xs muted">Clinic OS • Secure Sign-in</div>
+              <div className="text-xs muted">Clinic OS • Secure sign-in</div>
             </div>
           </div>
         </div>
 
-        {/* Contrast wrapper: gives the card a “stand out” rim + glow */}
+        {/* Premium rim */}
         <div
-          className="rounded-[22px] p-[1px]"
+          className="rounded-[24px] p-[1px]"
           style={{
             background:
-              "linear-gradient(135deg, rgba(var(--brand),0.55), rgba(255,255,255,0.08), rgba(var(--brand),0.18))",
-            boxShadow: "0 26px 70px rgba(0,0,0,0.55)",
+              "linear-gradient(135deg, rgba(var(--brand),0.55), rgba(var(--info),0.22), rgba(var(--success),0.18), rgba(255,255,255,0.10))",
+            boxShadow: "0 26px 70px rgba(0,0,0,0.60)",
           }}
         >
-          {/* The actual sign-in block (slightly brighter surface than default card) */}
-          <div
-            className="rounded-[22px] p-4 md:p-5 space-y-4"
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(var(--panel-2),0.92), rgba(var(--panel),0.88))",
-              border: "1px solid rgba(255,255,255,0.06)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
-            }}
-          >
+          {/* Sign-in block */}
+          <div className="rounded-[24px] px-4 py-5 md:px-5 md:py-6 space-y-4 modal">
             <div className="space-y-1">
               <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
               <p className="text-sm muted">Use your email and password to continue.</p>
@@ -104,7 +169,7 @@ export default function LoginPage() {
                 style={{
                   background:
                     "linear-gradient(180deg, rgba(var(--danger),0.22), rgba(var(--danger),0.12))",
-                  border: "1px solid rgba(var(--danger),0.28)",
+                  border: "1px solid rgba(var(--danger),0.30)",
                   color: "rgb(var(--fg))",
                   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
                 }}
@@ -113,63 +178,122 @@ export default function LoginPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid gap-3">
+              {/* Email */}
               <div className="space-y-1">
                 <div className="label">Email</div>
-                <input
-                  className="input"
-                  placeholder="you@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  inputMode="email"
-                  disabled={busy}
-                />
+                <div className="relative">
+                  <span
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+                    style={{ color: "rgb(var(--fg-muted))" }}
+                  >
+                    <EmailIcon className="h-4 w-4" />
+                  </span>
+                  <input
+                    className="input pl-10"
+                    placeholder="you@company.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="email"
+                    inputMode="email"
+                    disabled={busy}
+                  />
+                </div>
               </div>
 
+              {/* Password */}
               <div className="space-y-1">
                 <div className="label">Password</div>
-                <input
-                  className="input"
-                  placeholder="••••••••"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  disabled={busy}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") submit();
-                  }}
-                />
+                <div className="relative">
+                  <span
+                    className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+                    style={{ color: "rgb(var(--fg-muted))" }}
+                  >
+                    <LockIcon className="h-4 w-4" />
+                  </span>
+
+                  <input
+                    className="input pl-10 pr-12"
+                    placeholder="••••••••"
+                    type={showPw ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    disabled={busy}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") submit();
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    className={cls("btn btn-ghost btn-icon-sm absolute right-2 top-1/2 -translate-y-1/2")}
+                    onClick={() => setShowPw((v) => !v)}
+                    disabled={busy}
+                    aria-label={showPw ? "Hide password" : "Show password"}
+                    title={showPw ? "Hide password" : "Show password"}
+                  >
+                    {showPw ? "🙈" : "👁️"}
+                  </button>
+                </div>
               </div>
 
-              <button className="btn btn-primary w-full" onClick={submit} disabled={busy} type="button">
-                {busy ? "Signing in..." : "Login"}
-              </button>
+              {/* CTA row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <button
+                  className={cls("btn w-full", "btn-primary")}
+                  onClick={submit}
+                  disabled={!canSubmit}
+                  type="button"
+                >
+                  {busy ? "Signing in..." : "Sign in"}
+                </button>
 
-              {/* <button
-                className="btn btn-secondary w-full"
-                type="button"
-                onClick={() => {
-                  setEmail("");
-                  setPassword("");
-                  setErr(null);
+                <button
+                  className="btn btn-secondary w-full"
+                  type="button"
+                  onClick={() => {
+                    if (busy) return;
+                    setEmail("");
+                    setPassword("");
+                    setErr(null);
+                  }}
+                  disabled={busy}
+                >
+                  Clear
+                </button>
+              </div>
+
+              {/* Helper row */}
+              <div
+                className="rounded-xl p-3 text-xs"
+                style={{
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
                 }}
-                disabled={busy}
               >
-                Clear
-              </button> */}
-            </div>
-
-            <div className="text-xs muted">
-              If your password was reset by Admin, you may be redirected to change it.
+                <div className="flex items-start gap-2">
+                  <span
+                    className="mt-[2px] inline-flex h-5 w-5 items-center justify-center rounded-full"
+                    style={{
+                      background: "rgba(var(--info),0.16)",
+                      border: "1px solid rgba(var(--info),0.26)",
+                    }}
+                  >
+                    i
+                  </span>
+                  <div className="muted">
+                    If your password was reset by Admin, you may be redirected to change it.
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Footer */}
         <div className="mt-4 text-[11px] muted text-center">
-          © {new Date().getFullYear()} Aksha
+          © {new Date().getFullYear()} Aksha • Secure Access
         </div>
       </div>
     </main>
