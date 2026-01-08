@@ -3,6 +3,8 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
+
 
 function cls(...xs: Array<string | false | null | undefined>) {
   return xs.filter(Boolean).join(" ");
@@ -114,25 +116,17 @@ export default function LoginPage() {
       }}
     >
       <div className="w-full max-w-md">
-        {/* Brand */}
-        <div className="mb-5">
-          <div className="flex items-center gap-3">
-            <div
-              className="h-11 w-11 rounded-2xl"
-              style={{
-                background:
-                  "radial-gradient(120% 120% at 30% 20%, rgb(var(--brand) / 0.80), rgb(var(--brand) / 0.14))",
-                boxShadow:
-                  "0 18px 45px rgb(var(--brand) / 0.18), inset 0 1px 0 rgb(255 255 255 / 0.10)",
-                border: "1px solid rgb(255 255 255 / 0.10)",
-              }}
-            />
-            <div className="min-w-0">
-              <div className="text-lg font-semibold leading-tight">Aksha</div>
-              <div className="text-xs muted">Clinic OS • Secure sign-in</div>
+          {/* Brand */}
+          <div className="mb-6 text-center">
+            <div className="text-2xl font-semibold tracking-tight">
+              Aksha 
+            </div>
+            <div className="mt-1 text-xs muted">
+              
             </div>
           </div>
-        </div>
+
+
 
         {/* Premium rim */}
         <div
@@ -301,7 +295,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="mt-4 text-[11px] muted text-center">
-          © {new Date().getFullYear()} Aksha • Secure Access
+          © {new Date().getFullYear()} Aksha
         </div>
       </div>
     </main>

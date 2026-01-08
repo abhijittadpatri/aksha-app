@@ -266,7 +266,7 @@ export default function Sidebar() {
               <div className="text-lg font-semibold leading-tight truncate" style={{ color: "rgb(var(--fg))" }}>
                 Aksha
               </div>
-              <div className="text-xs subtle truncate">{tenantName}</div>
+              <div className="text-xs subtle truncate"></div>
             </div>
 
             {me?.role ? <span className="badge">{me.role}</span> : null}
@@ -348,7 +348,7 @@ export default function Sidebar() {
             </button>
           </div>
 
-          <div className="mt-3 text-[11px] subtle">v0.1 • SaaS shell polish</div>
+          <div className="mt-3 text-[11px] subtle">v0.1 Powered by Madhvantage</div>
         </div>
       </div>
     </aside>
