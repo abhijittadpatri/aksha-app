@@ -30,6 +30,9 @@ export default function PatientsPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Render exactly ONE list variant (mobile OR desktop) to avoid duplicate UI
+  const [isDesktop, setIsDesktop] = useState(false);
+
   // form
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
@@ -39,6 +42,14 @@ export default function PatientsPage() {
 
   const activeStoreId =
     typeof window !== "undefined" ? localStorage.getItem("activeStoreId") : null;
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   async function load() {
     setErr(null);
@@ -170,7 +181,7 @@ export default function PatientsPage() {
               onChange={(e) => setQ(e.target.value)}
             />
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <button
                 className="btn btn-secondary"
                 onClick={() => setQ("")}
@@ -198,78 +209,95 @@ export default function PatientsPage() {
               {err}
             </div>
           )}
+
+          {!activeStoreId ? (
+            <div className="mt-3 text-xs muted">
+              Select an active store in the sidebar to view patients.
+            </div>
+          ) : null}
         </div>
 
-        {/* Mobile cards */}
-          {/* Mobile cards */}
-          {!isDesktop && (
-            <div className="space-y-3">
-              ...
-            </div>
-          )}
+        {/* MOBILE (rendered only when !isDesktop) */}
+        {!isDesktop && (
+          <div className="space-y-3">
+            {loading && filtered.length === 0 && !err && (
+              <div className="text-sm subtle">Loading patients…</div>
+            )}
 
-          {filtered.map((p) => (
-            <div key={p.id} className="panel p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-semibold truncate">{p.name}</div>
-                  <div className="mt-1 text-xs muted">
-                    {p.mobile ? `📞 ${p.mobile}` : "—"}
-                    {p.gender ? ` • ${p.gender}` : ""}
-                    {p.age ? ` • ${p.age} yrs` : ""}
+            {filtered.map((p) => (
+              <div key={p.id} className="panel p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate">{p.name}</div>
+                    <div className="mt-1 text-xs muted">
+                      {p.mobile ? `📞 ${p.mobile}` : "—"}
+                      {p.gender ? ` • ${p.gender}` : ""}
+                      {p.age ? ` • ${p.age} yrs` : ""}
+                    </div>
                   </div>
+
+                  <Link
+                    className="btn btn-secondary btn-sm shrink-0"
+                    href={`/patients/${p.id}`}
+                  >
+                    Open
+                  </Link>
+                </div>
+              </div>
+            ))}
+
+            {!loading && filtered.length === 0 && (
+              <div className="panel p-4 text-sm muted">
+                No patients yet for this store.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* DESKTOP (rendered only when isDesktop) */}
+        {isDesktop && (
+          <div className="table">
+            <div className="table-head grid-cols-12 p-3">
+              <div className="col-span-5">Name</div>
+              <div className="col-span-4">Details</div>
+              <div className="col-span-3 text-right">Action</div>
+            </div>
+
+            {loading && filtered.length === 0 && !err && (
+              <div className="p-4 text-sm muted">Loading patients…</div>
+            )}
+
+            {filtered.map((p) => (
+              <div
+                key={p.id}
+                className="table-row grid-cols-12 p-3 items-center"
+              >
+                <div className="col-span-5 min-w-0">
+                  <div className="font-medium truncate">{p.name}</div>
                 </div>
 
-                <Link
-                  className="btn btn-secondary btn-sm shrink-0"
-                  href={`/patients/${p.id}`}
-                >
-                  Open
-                </Link>
+                <div className="col-span-4 text-xs muted truncate">
+                  {p.mobile ? `📞 ${p.mobile}` : "—"}
+                  {p.gender ? ` • ${p.gender}` : ""}
+                  {p.age ? ` • ${p.age} yrs` : ""}
+                </div>
+
+                <div className="col-span-3 text-right">
+                  <Link
+                    className="btn btn-secondary btn-sm"
+                    href={`/patients/${p.id}`}
+                  >
+                    Open
+                  </Link>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
 
-          {!loading && filtered.length === 0 && (
-            <div className="panel p-4 text-sm muted">No patients yet for this store.</div>
-          )}
-        </div>
-
-        {/* Desktop table */}
-          {/* Desktop table */}
-          {isDesktop && (
-            <div className="table">
-              ...
-            </div>
-          )}
-          {loading && filtered.length === 0 && !err && (
-            <div className="p-4 text-sm muted">Loading patients…</div>
-          )}
-
-          {filtered.map((p) => (
-            <div key={p.id} className="table-row grid-cols-12 p-3 items-center">
-              <div className="col-span-5 min-w-0">
-                <div className="font-medium truncate">{p.name}</div>
-              </div>
-
-              <div className="col-span-4 text-xs muted truncate">
-                {p.mobile ? `📞 ${p.mobile}` : "—"}
-                {p.gender ? ` • ${p.gender}` : ""}
-                {p.age ? ` • ${p.age} yrs` : ""}
-              </div>
-
-              <div className="col-span-3 text-right">
-                <Link className="btn btn-secondary btn-sm" href={`/patients/${p.id}`}>
-                  Open
-                </Link>
-              </div>
-            </div>
-          ))}
-
-          {!loading && filtered.length === 0 && (
-            <div className="p-6 muted">No patients yet for this store.</div>
-          )}
-        </div>
+            {!loading && filtered.length === 0 && (
+              <div className="p-6 muted">No patients yet for this store.</div>
+            )}
+          </div>
+        )}
 
         {/* Add Patient (Standard Modal Shell) */}
         <Modal
@@ -350,7 +378,11 @@ export default function PatientsPage() {
                 inputMode="numeric"
               />
 
-              <select className="input" value={gender} onChange={(e) => setGender(e.target.value)}>
+              <select
+                className="input"
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+              >
                 <option>Male</option>
                 <option>Female</option>
                 <option>Other</option>
@@ -364,7 +396,9 @@ export default function PatientsPage() {
               onChange={(e) => setAddress(e.target.value)}
             />
 
-            <div className="text-xs muted">Tip: Search supports name + mobile.</div>
+            <div className="text-xs muted">
+              Tip: Search supports name + mobile.
+            </div>
           </div>
         </Modal>
       </div>
