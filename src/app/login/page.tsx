@@ -10,12 +10,7 @@ function cls(...xs: Array<string | false | null | undefined>) {
 
 function EmailIcon(props: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className={props.className}
-      fill="none"
-    >
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={props.className} fill="none">
       <path
         d="M4.5 7.5A3 3 0 0 1 7.5 4.5h9a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3h-9a3 3 0 0 1-3-3v-9Z"
         stroke="currentColor"
@@ -35,12 +30,7 @@ function EmailIcon(props: { className?: string }) {
 
 function LockIcon(props: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className={props.className}
-      fill="none"
-    >
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={props.className} fill="none">
       <path
         d="M7.5 10.5V8.3a4.5 4.5 0 1 1 9 0v2.2"
         stroke="currentColor"
@@ -53,12 +43,7 @@ function LockIcon(props: { className?: string }) {
         strokeWidth="1.6"
         opacity="0.95"
       />
-      <path
-        d="M12 14.2v3"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
+      <path d="M12 14.2v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }
@@ -118,26 +103,28 @@ export default function LoginPage() {
 
   return (
     <main
-      className="min-h-[100dvh] flex items-center justify-center px-4 py-8"
+      className="min-h-[100dvh] flex items-center justify-center px-4 py-10"
       style={{
+        // IMPORTANT: use modern rgb(var(--x) / a) syntax (your tokens are "R G B")
         background:
-          "radial-gradient(1100px 520px at 10% 5%, rgba(var(--brand),0.20), transparent 60%)," +
-          "radial-gradient(900px 520px at 90% 0%, rgba(var(--info),0.14), transparent 60%)," +
-          "radial-gradient(900px 520px at 60% 110%, rgba(var(--success),0.10), transparent 60%)",
+          "radial-gradient(1100px 520px at 10% 5%, rgb(var(--brand) / 0.22), transparent 60%)," +
+          "radial-gradient(900px 520px at 90% 0%, rgb(var(--info) / 0.16), transparent 60%)," +
+          "radial-gradient(900px 520px at 60% 110%, rgb(var(--success) / 0.12), transparent 60%)," +
+          "linear-gradient(180deg, rgb(var(--bg)), rgb(var(--bg)))",
       }}
     >
       <div className="w-full max-w-md">
-        {/* Brand header */}
+        {/* Brand */}
         <div className="mb-5">
           <div className="flex items-center gap-3">
             <div
               className="h-11 w-11 rounded-2xl"
               style={{
                 background:
-                  "radial-gradient(120% 120% at 30% 20%, rgba(var(--brand),0.70), rgba(var(--brand),0.12))",
+                  "radial-gradient(120% 120% at 30% 20%, rgb(var(--brand) / 0.80), rgb(var(--brand) / 0.14))",
                 boxShadow:
-                  "0 18px 45px rgba(var(--brand),0.18), inset 0 1px 0 rgba(255,255,255,0.10)",
-                border: "1px solid rgba(255,255,255,0.10)",
+                  "0 18px 45px rgb(var(--brand) / 0.18), inset 0 1px 0 rgb(255 255 255 / 0.10)",
+                border: "1px solid rgb(255 255 255 / 0.10)",
               }}
             />
             <div className="min-w-0">
@@ -152,12 +139,27 @@ export default function LoginPage() {
           className="rounded-[24px] p-[1px]"
           style={{
             background:
-              "linear-gradient(135deg, rgba(var(--brand),0.55), rgba(var(--info),0.22), rgba(var(--success),0.18), rgba(255,255,255,0.10))",
-            boxShadow: "0 26px 70px rgba(0,0,0,0.60)",
+              "linear-gradient(135deg," +
+              "  rgb(var(--brand) / 0.60)," +
+              "  rgb(var(--info) / 0.28)," +
+              "  rgb(var(--success) / 0.22)," +
+              "  rgb(255 255 255 / 0.10)" +
+              ")",
+            boxShadow: "0 26px 70px rgb(0 0 0 / 0.62)",
           }}
         >
           {/* Sign-in block */}
-          <div className="rounded-[24px] px-4 py-5 md:px-5 md:py-6 space-y-4 modal">
+          <div
+            className="rounded-[24px] px-4 py-5 md:px-5 md:py-6 space-y-4"
+            style={{
+              background:
+                "linear-gradient(180deg, rgb(var(--panel-2) / 0.92), rgb(var(--panel) / 0.88))",
+              border: "1px solid rgb(255 255 255 / 0.06)",
+              boxShadow:
+                "inset 0 1px 0 rgb(255 255 255 / 0.06), 0 30px 80px rgb(0 0 0 / 0.55)",
+              backdropFilter: "blur(6px)",
+            }}
+          >
             <div className="space-y-1">
               <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
               <p className="text-sm muted">Use your email and password to continue.</p>
@@ -168,10 +170,10 @@ export default function LoginPage() {
                 className="rounded-xl px-3 py-2 text-sm"
                 style={{
                   background:
-                    "linear-gradient(180deg, rgba(var(--danger),0.22), rgba(var(--danger),0.12))",
-                  border: "1px solid rgba(var(--danger),0.30)",
+                    "linear-gradient(180deg, rgb(var(--danger) / 0.22), rgb(var(--danger) / 0.12))",
+                  border: "1px solid rgb(var(--danger) / 0.30)",
                   color: "rgb(var(--fg))",
-                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                  boxShadow: "inset 0 1px 0 rgb(255 255 255 / 0.06)",
                 }}
               >
                 {err}
@@ -181,13 +183,13 @@ export default function LoginPage() {
             <div className="grid gap-3">
               {/* Email */}
               <div className="space-y-1">
-                <div className="label">Email</div>
+                <div className="label">Email </div>
+                
                 <div className="relative">
                   <span
                     className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
                     style={{ color: "rgb(var(--fg-muted))" }}
                   >
-                    <EmailIcon className="h-4 w-4" />
                   </span>
                   <input
                     className="input pl-10"
@@ -209,7 +211,6 @@ export default function LoginPage() {
                     className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
                     style={{ color: "rgb(var(--fg-muted))" }}
                   >
-                    <LockIcon className="h-4 w-4" />
                   </span>
 
                   <input
@@ -232,13 +233,18 @@ export default function LoginPage() {
                     disabled={busy}
                     aria-label={showPw ? "Hide password" : "Show password"}
                     title={showPw ? "Hide password" : "Show password"}
+                    style={{
+                      // slightly more visible on this page
+                      borderColor: "rgb(255 255 255 / 0.14)",
+                      color: "rgb(var(--fg))",
+                    }}
                   >
                     {showPw ? "🙈" : "👁️"}
                   </button>
                 </div>
               </div>
 
-              {/* CTA row */}
+              {/* Actions */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                 <button
                   className={cls("btn w-full", "btn-primary")}
@@ -264,20 +270,22 @@ export default function LoginPage() {
                 </button>
               </div>
 
-              {/* Helper row */}
+              {/* Helper */}
               <div
                 className="rounded-xl p-3 text-xs"
                 style={{
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.08)",
+                  background: "rgb(255 255 255 / 0.04)",
+                  border: "1px solid rgb(255 255 255 / 0.10)",
+                  boxShadow: "inset 0 1px 0 rgb(255 255 255 / 0.05)",
                 }}
               >
                 <div className="flex items-start gap-2">
                   <span
                     className="mt-[2px] inline-flex h-5 w-5 items-center justify-center rounded-full"
                     style={{
-                      background: "rgba(var(--info),0.16)",
-                      border: "1px solid rgba(var(--info),0.26)",
+                      background: "rgb(var(--info) / 0.16)",
+                      border: "1px solid rgb(var(--info) / 0.26)",
+                      color: "rgb(var(--fg))",
                     }}
                   >
                     i
