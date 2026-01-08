@@ -1224,13 +1224,15 @@ export default function PatientDetailPage() {
 
                   // single primary CTA based on state
                   let primaryLabel = "Generate Invoice";
-                  let primaryAction = () => generateInvoiceForOrder(orderId);
+                  let primaryAction: () => void | Promise<void> = () => generateInvoiceForOrder(o.id);
                   let primaryKind: "primary" | "secondary" = "primary";
-
+                  
                   if (billed && inv?.id) {
                     if (invPS === "Paid") {
                       primaryLabel = "Open Invoice";
-                      primaryAction = () => (window.location.href = `/invoices/${inv.id}`);
+                      primaryAction = () => {
+                        window.location.href = `/invoices/${inv.id}`;
+                      };
                       primaryKind = "secondary";
                     } else {
                       primaryLabel = "Record Payment";
