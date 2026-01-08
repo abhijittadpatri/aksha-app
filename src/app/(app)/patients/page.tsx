@@ -201,9 +201,11 @@ export default function PatientsPage() {
         </div>
 
         {/* Mobile cards */}
-        <div className="block md:hidden space-y-3">
-          {loading && filtered.length === 0 && !err && (
-            <div className="text-sm subtle">Loading patients…</div>
+          {/* Mobile cards */}
+          {!isDesktop && (
+            <div className="space-y-3">
+              ...
+            </div>
           )}
 
           {filtered.map((p) => (
@@ -234,13 +236,12 @@ export default function PatientsPage() {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden md:block table">
-          <div className="table-head grid-cols-12 p-3">
-            <div className="col-span-5">Name</div>
-            <div className="col-span-4">Details</div>
-            <div className="col-span-3 text-right">Action</div>
-          </div>
-
+          {/* Desktop table */}
+          {isDesktop && (
+            <div className="table">
+              ...
+            </div>
+          )}
           {loading && filtered.length === 0 && !err && (
             <div className="p-4 text-sm muted">Loading patients…</div>
           )}
