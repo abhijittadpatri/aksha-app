@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     template: "%s · Aksha",
   },
   applicationName: "Aksha",
-  manifest: "/manifest.webmanifest",
+  manifest: "public/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -40,14 +40,16 @@ export default function RootLayout({
         <Script id="sw-register" strategy="afterInteractive">
           {`
             if ("serviceWorker" in navigator) {
-              window.addEventListener("load", () => {
-                navigator.serviceWorker
-                  .register("/sw.js")
-                  .catch(() => {});
+              window.addEventListener("load", async () => {
+                try {
+                  const reg = await navigator.serviceWorker.register("/sw.js");
+                  reg.update?.();
+                } catch {}
               });
             }
           `}
         </Script>
+
       </body>
     </html>
   );
