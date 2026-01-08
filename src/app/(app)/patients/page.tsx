@@ -201,7 +201,7 @@ export default function PatientsPage() {
         </div>
 
         {/* Mobile cards */}
-        <div className="md:hidden space-y-3">
+        <div className="block md:hidden space-y-3">
           {loading && filtered.length === 0 && !err && (
             <div className="text-sm subtle">Loading patients…</div>
           )}
