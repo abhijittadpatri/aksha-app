@@ -2,7 +2,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 
 
@@ -57,6 +57,9 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showPw, setShowPw] = useState(false);
+  const searchParams = useSearchParams();
+  const returnTo = searchParams.get("returnTo") || "/dashboard";
+
 
   const canSubmit = useMemo(() => {
     const e = email.trim().toLowerCase();
@@ -74,7 +77,7 @@ export default function LoginPage() {
 
     setBusy(true);
     try {
-      const res = await fetch("/api/auth/login-password", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -88,13 +91,13 @@ export default function LoginPage() {
         return;
       }
 
-      if (data.mustChangePassword) {
+     if (data.mustChangePassword) {
         router.push("/change-password");
         router.refresh();
         return;
       }
 
-      router.push("/dashboard");
+      router.push(returnTo);
       router.refresh();
     } catch (e: any) {
       setErr(e?.message ?? "Login error");
